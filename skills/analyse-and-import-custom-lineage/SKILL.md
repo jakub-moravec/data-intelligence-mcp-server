@@ -9,6 +9,20 @@ description: Use this skill to help users document custom lineage in watsonx.dat
 - OpenLineage JobEvent payload generation
 - Lineage visualization and validation
 
+## CRITICAL RULE: Never Invent Technical Details
+
+**MANDATORY REQUIREMENT:** If the source code, documentation, or user input does NOT explicitly contain:
+- Hostnames
+- Port numbers
+- Connection strings
+- Technology identifiers
+- Any other technical coordinates
+
+**YOU MUST:**
+1. **STOP** processing immediately
+2. **ASK** the user to provide the missing information
+3. **NEVER** invent, assume, or guess these values
+
 ## Workflows
 
 ### Workflow 1: User-Directed Lineage Documentation
@@ -56,8 +70,17 @@ description: Use this skill to help users document custom lineage in watsonx.dat
 - Filters/aggregations
 - System-generated columns
 
-**When Information is Missing:**
-If unclear from inputs what are the involved technologies, their hostnames, ports, or other necessary identifying information, **ALWAYS ask the user to provide this information** before proceeding. This applies regardless of whether the input is user-provided descriptions or source code/documentation. It is critical to have this information, you cannot construct correct OpenLineage namespaces and names without knowing for which technology it is, for example.
+**When Information is Missing - MANDATORY PROTOCOL:**
+
+**STOP IMMEDIATELY** if you cannot determine from the provided inputs:
+- Technology type (Oracle, Snowflake, PostgreSQL, etc.)
+- Hostname, port number, server address, account name, or another data source identifier for given technology
+- Database name (if applicable)
+- Any other identifying coordinates
+
+**REQUIRED ACTION:** Ask the user explicitly:
+"I cannot find [specific missing information] in the [source code/documentation]. To create correct OpenLineage namespaces, I need you to provide:
+- [List specific missing items]"
 
 ### Naming Conventions (Apply to All JobEvents)
 
@@ -221,6 +244,8 @@ Scan for: Database connections (JDBC URLs, connection strings), file paths (CSV,
 Extract: System type, connection details, dataset names
 
 **Ask for missing information:** If unclear from inputs what are the involved technologies, their hostnames, ports, or other necessary inputs, ask the user to provide this information.
+
+**MANDATORY CHECKPOINT:** Before proceeding to Step 2, verify you have ACTUAL values (not invented) for all data sources. If ANY information is missing or unclear, STOP and ask the user.
 
 **Step 2: Identify Data Destinations**
 Scan for: Write operations (INSERT, UPDATE, CREATE TABLE), file write operations, API POST/PUT operations with data, message publishing operations
@@ -450,6 +475,16 @@ Collect all necessary details through conversation:
 - Column mappings and transformations
 - Data source connection URIs
 
+**VALIDATION CHECKPOINT - MANDATORY:**
+
+Before proceeding to Step 2, verify you have ACTUAL values (not invented) for:
+- [ ] Technology type (from code or user)
+- [ ] Hostname, port, or any other relevant data source identifier (from code or user) - NOT invented
+- [ ] Port (from code or user) - NOT invented
+- [ ] All namespace components
+
+**If ANY checkbox is unchecked:** STOP and ask user for missing information.
+
 ### Step 2: Construct the JobEvent JSON
 Build the JSON structure following this template:
 
@@ -566,6 +601,16 @@ Build the JSON structure following this template:
 ```
 
 ### Step 3: Populate All Fields
+
+** NAMESPACE VALIDATION - MANDATORY:**
+
+Before setting namespace values, verify hostname and port are:
+- [ ] From actual source code OR
+- [ ] Explicitly provided by user
+- [ ] NOT invented/assumed/guessed
+
+**If verification fails:** STOP and ask user.
+
 - **producer** in the root and **_producer** in all facets should be https://github.com/IBM/data-intelligence-mcp-server
 - **eventTime**: Generate current timestamp in ISO-8601 format (e.g., `2024-01-15T10:00:00.000Z`)
 - **job.namespace**: Use the job namespace corresponding to the technology of the job, host, and port if provided (`technology://host:port`)

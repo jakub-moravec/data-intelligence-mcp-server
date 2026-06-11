@@ -255,8 +255,8 @@ The hierarchy facet describes the organizational structure of a dataset within i
             "field": "cust_id",
             "transformations": [
                 {
-                    "type": "IDENTITY",
-                    "description": ""
+                    "type": "DIRECT",
+                    "subType": "IDENTITY"
                 }
             ]
           }
@@ -384,6 +384,11 @@ For Workflow 2, the model must analyze provided materials (code, documentation, 
 - SET statements (configuration)
 - Comments: `-- This is a comment`
 
+**How to construct names:**
+
+- entities like tables and stored procedures might already be referenced by their qualified names
+- you can also use context, for example, see what is the current active schema at the point when a table is created
+
 #### Java/Spark Code Analysis
 
 **Look for:**
@@ -488,6 +493,9 @@ Extract:
 - Connection details
 - Dataset names (tables, files, topics)
 
+Ask for missing information: 
+- if unclear from the inputs what are the involved technologies, their hostnames, ports, or other necessary inputs, ask the user to provide this information
+
 #### Step 2: Identify Data Destinations
 Scan for:
 - Write operations (INSERT, UPDATE, CREATE TABLE)
@@ -499,6 +507,9 @@ Extract:
 - Target system type
 - Target dataset names
 - Write patterns (append, overwrite, upsert)
+
+Ask for missing information: 
+- if unclear from the inputs what are the involved technologies, their hostnames, ports, or other necessary inputs, ask the user to provide this information
 
 #### Step 3: Identify Transformations
 Look for:
@@ -582,12 +593,14 @@ Does this match your understanding? Are there any corrections needed?
 The model must generate OpenLineage JobEvent payloads directly. Follow these steps:
 
 #### Step 1: Gather Required Information
-Collect all necessary details through conversation:
-- Job namespace and name
+Collect all necessary details through conversation. 
+- Understand what are the technologies involved
+- Review the generic naming conventions below, and retrieve official naming conventions for the involved technologies https://openlineage.io/docs/spec/naming. 
+- Job namespace and name. Make sure to follow the naming conventions above. For the Job name, if a naming convention for the technology of the Job is defined, follow it strictly and make sure to use the right number of segments with the right values.
 - Job description and type (BATCH, STREAMING, etc.)
-- Input datasets (namespace, name, columns, data types)
-- Output datasets (namespace, name, columns, data types)
-- Dataset hierarchy information (levels such as database, schema, table with their values)
+- Input datasets (namespace, name, columns, data types). Make sure to follow the naming conventions above. For the dataset name, if a naming convention for the technology of the dataset is defined, follow it strictly and make sure to use the right number of segments with the right values.
+- Output datasets (namespace, name, columns, data types). Make sure to follow the naming conventions above. For the dataset name, if a naming convention for the technology of the dataset is defined, follow it strictly and make sure to use the right number of segments with the right values.
+- Dataset hierarchy information (levels such as database - where relevant as some databases don't have a concept of logical database names, schema where relevant as some databases don't have a concept of schemas, table with their values)
 - Column mappings and transformations
 - Data source connection URIs
 
@@ -688,9 +701,9 @@ Build the JSON structure following this template:
                   "field": "<input-field>",
                   "transformations": [
                       {
-                          "type": "<IDENTITY, TRANSFORMATION, or AGGREGATION>",
-                          "subtype": "<JOIN, GROUP_BY, FILTER, SORT, WINDOW, CONDITIONAL - provided only if 'type' is not 'IDENTITY'>",
-                          "description": "<transformation formula provided only if 'type' is not 'IDENTITY'>",
+                          "type": "<DIRECT or INDIRECT>",
+                          "subtype": "<IDENTITY, TRANSFORMATION, or AGGREGATION for DIRECT type, JOIN, GROUP_BY, FILTER, SORT, WINDOW, CONDITIONAL for INDIRECT type>",
+                          "description": "<transformation formula provided only if 'type' is not 'IDENTITY' - it should show the source column(s) and the operation performed with them, e.g. sum(ammount)>",
                           "masking": "<true (boolean value) if input is hashed or aggregation function like count is used>"
                       }
                   ]
@@ -710,14 +723,14 @@ Build the JSON structure following this template:
 - **producer** in the root and **_producer** in all facets should be https://github.com/IBM/data-intelligence-mcp-server
 - **eventTime**: Generate current timestamp in ISO-8601 format (e.g., `2024-01-15T10:00:00.000Z`)
 - **job.namespace**: Use the job namespace corresponding to the technology of the job, host, and port if provided (`technology://host:port`)
-- **job.name**: Use the job name provided by user
+- **job.name**: Use the job name based on the processed inputs, formatted according to the best practices 
 - **job.facets.documentation.description**: Use the job description from conversation
 - **job.facets.jobType.processingType**: Set to "BATCH" or "STREAMING" based on job type
 - **inputs**: Create array with all input datasets
 - **outputs**: Create array with all output datasets
 - **For datasets**: 
-     - namespace: Use the job namespace corresponding to the technology of the dataset, host, and port if provided (`technology://host:port`)
-     - name: Use the job name provided by the user
+     - namespace: Use the dataset namespace corresponding to the technology of the dataset, host, and port if provided (`technology://host:port`)
+     - name: Use the dataset name based on the processed inputs, formatted according to the best practices
      - Include hierarchy facet with appropriate levels (e.g., database, schema, table)
      - Include schema facet with all fields (and if user provided them, also with their types)
      - Include columnLineage facet on outputs if user specified how the transformation moves data, otherwise don't include this - lineage will be derived from the schema
@@ -792,15 +805,18 @@ Once validated and approved:
 - Be consistent across related jobs and datasets
 
 **Job Names:**
-- Use known best practices https://openlineage.io/docs/spec/naming
-- Use descriptive, kebab-case names: `customer-data-sync`
-- Include purpose: `daily-sales-aggregation`
-- Avoid generic names like `job1` or `etl`
+- Use known best practices for technologies that have them defined https://openlineage.io/docs/spec/naming
+- Per each technology, check how many segments the name is expected to have and what is their meaning. This is different for each technology. 
+- If the job represents a database transformation like a stored procedure or function, follow the defined best practices (https://openlineage.io/docs/spec/naming) for the datasets for given technology, and only change the last name segment to the name of the transformation. For example, if the job represents Oracle stored procedure, use the following pattern (because this is the generic pattern for Oracle): `schema.storedprocedure` 
+- Use qualified names: `project.job`, `directory.script`, `database.schema.storedprocedure`, etc
+- Examples: `mydatastageproject.load_jobs`, `warehouse.staging.load_orders`
+- Include full path for clarity
 
 **Dataset Names:**
 - Use known best practices https://openlineage.io/docs/spec/naming
-- Use qualified names: `database.schema.table`
-- Examples: `crm.public.customers`, `warehouse.staging.orders`
+- Per each technology, check how many segments the name is expected to have and what is their meaning. This is different for each technology. 
+- Use qualified names: `database.schema.table`, `schema.table`, `folder.file`,
+- Examples: `crm.public.customers`, `staging.orders`
 - Include full path for clarity
 
 ### Column Lineage Structure

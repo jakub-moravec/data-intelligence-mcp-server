@@ -420,16 +420,16 @@ JobEvents document static job lineage without execution-specific run information
     "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
     "hierarchy": [
       {
-        "name": "database",
-        "value": "CRMDB"
+        "type": "database",
+        "name": "CRMDB"
       },
       {
-        "name": "schema",
-        "value": "public"
+        "type": "schema",
+        "name": "public"
       },
       {
-        "name": "table",
-        "value": "customers"
+        "type": "table",
+        "name": "customers"
       }
     ]
   }
@@ -573,10 +573,10 @@ Build the JSON structure following this template:
         "hierarchy": {
           "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
           "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
-          "levels": [
+          "hierarchy": [
             {
-              "name": "<level-name>",
-              "value": "<level-value>"
+              "type": "<level-type-name>",
+              "name": "<level-object-name>"
             }
           ]
         }
@@ -602,10 +602,10 @@ Build the JSON structure following this template:
         "hierarchy": {
           "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
           "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
-          "levels": [
+          "hierarchy": [
             {
-              "name": "<level-name>",
-              "value": "<level-value>"
+              "type": "<level-name>",
+              "name": "<level-value>"
             }
           ]
         },

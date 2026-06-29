@@ -238,33 +238,72 @@ Does this look correct?
 
 ### Lineage Discovery Process
 
-**Step 1: Identify Data Sources**
-Scan for: Database connections (JDBC URLs, connection strings), file paths (CSV, Parquet, JSON), API endpoints that return data, message queues/topics (Kafka, RabbitMQ), cloud storage (S3, Azure Blob, GCS)
+**Step 1: Identify Data Sources, Targets, and Jobs **
+
+Jobs: 
+- write operations (INSERT, UPDATE, CREATE TABLE AS INSERT statements)
+- file write operations
+- API POST/PUT operations with data
+- message publishing operations
+- Break down complex scripts to individual operations and document each of them as a separate job. 
+- For example, a job should be  a single SQL statement, a single file load, a single stored procedure, a single function, etc. 
+- If a complex pipeline consist of several independent data movements, document each as a separate job (and JobEvent), and use the intermediate result storages (tables, files, temporary tables, in memory data)
+
+Data sources: 
+- Database connections (JDBC URLs, connection strings)
+- file paths (CSV, Parquet, JSON)
+- API endpoints that return data
+- message queues/topics (Kafka, RabbitMQ)
+- cloud storage (S3, Azure Blob, GCS)
 
 Extract: System type, connection details, dataset names
+
+Targets: 
+- Targets of write operations (INSERT, UPDATE, CREATE TABLE AS INSERT statements)
+- Targets of file write operations
+- Targets of API POST/PUT operations with data
+- Targets of message publishing operations
+
+Extract: Target system type, target dataset names, write patterns (append, overwrite, upsert)
+
 
 **Ask for missing information:** If unclear from inputs what are the involved technologies, their hostnames, ports, or other necessary inputs, ask the user to provide this information.
 
 **MANDATORY CHECKPOINT:** Before proceeding to Step 2, verify you have ACTUAL values (not invented) for all data sources. If ANY information is missing or unclear, STOP and ask the user.
 
-**Step 2: Identify Data Destinations**
-Scan for: Write operations (INSERT, UPDATE, CREATE TABLE), file write operations, API POST/PUT operations with data, message publishing operations
 
-Extract: Target system type, target dataset names, write patterns (append, overwrite, upsert)
+**Step 2: Identify Individual Transformations**
+Look for: 
+**DIRECT lineage** - Source column values flow into the output column (possibly transformed):
+- Column calculations/derivations (e.g., price * quantity)
+- Aggregation functions (SUM, AVG, COUNT, MIN, MAX) - use subtype AGGREGATION
+- Data type conversions and string manipulations
+- GROUP BY columns that appear in SELECT - use subtype IDENTITY (the distinct values flow through)
+- Column renames or CASE statements
 
-**Ask for missing information:** If unclear from inputs what are the involved technologies, their hostnames, ports, or other necessary inputs, ask the user to provide this information.
+**INDIRECT lineage** - Source column influences the result but values don't flow to output:
+- WHERE clause filtering conditions (determines which rows are included)
+- JOIN conditions (determines how tables are matched)
+- HAVING clause conditions (filters aggregated results)
+- ORDER BY, PARTITION BY (affects row ordering/grouping but not output values)
 
-**Step 3: Identify Transformations**
-Look for: Column calculations/derivations, filtering conditions (WHERE clauses), aggregations (GROUP BY, SUM, AVG), joins between datasets, data type conversions, string manipulations
+**Special Case - GROUP BY Columns:**
+- Columns in both SELECT and GROUP BY: Use DIRECT/IDENTITY (values flow through as distinct values)
+- Columns only in GROUP BY (not in SELECT): Use INDIRECT/GROUP_BY (only influences grouping)
 
-Document: Transformation type (IDENTITY, MASKED, TRANSFORMATION), transformation description, input fields used, output field produced
+This list of operations is not exhaustive - are just common cases. Make sure you identify all the data movements within a script, even if they are not performed using one of these mechanisms. 
 
-**Step 4: Map Column Lineage**
+Always document ONLY direct lineage if a particular source acts as both direct and indirect source.
+
+Document: Transformation type (DIRECT, INDIRECT), subtype (IDENTITY, MASKED, TRANSFORMATION), transformation description, input fields used, output field produced
+
+
+**Step 3: Map Column Lineage**
 For each output column, determine: Which input column(s) it comes from, what transformation is applied, whether it's a direct copy, renamed, or calculated
 
 Create mappings: `output_column → [input_dataset.input_column] (transformation_type)`
 
-**Step 5: Validate Discovered Lineage**
+**Step 4: Validate Discovered Lineage**
 Ask yourself:
 - ✓ Does data actually move from source to destination?
 - ✓ Is there a clear job/process that performs this movement?
@@ -273,7 +312,7 @@ Ask yourself:
 - ✗ Am I confusing configuration with data flow?
 - ✗ Am I including operations that don't move data?
 
-**Step 6: Present Findings to User**
+**Step 5: Present Findings to User**
 ```
 I've analyzed the [code/documentation] and discovered the following lineage:
 
@@ -380,7 +419,7 @@ JobEvents document static job lineage without execution-specific run information
   "hierarchy": {
     "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
     "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
-    "levels": [
+    "hierarchy": [
       {
         "name": "database",
         "value": "CRMDB"
@@ -486,6 +525,8 @@ Before proceeding to Step 2, verify you have ACTUAL values (not invented) for:
 **If ANY checkbox is unchecked:** STOP and ask user for missing information.
 
 ### Step 2: Construct the JobEvent JSON
+Generate one Job event per job. Each Job event should be captured in a separate JSON document. 
+
 Build the JSON structure following this template:
 
 ```json
@@ -582,8 +623,8 @@ Build the JSON structure following this template:
                   "field": "<input-field>",
                   "transformations": [
                       {
-                          "type": "<DIRECT or INDIRECT>",
-                          "subtype": "<IDENTITY, TRANSFORMATION, or AGGREGATION for DIRECT type, JOIN, GROUP_BY, FILTER, SORT, WINDOW, CONDITIONAL for INDIRECT type>",
+                          "type": "<DIRECT or INDIRECT, if the source field quilifies both as direct and indirect source, prioritize DIRECT>",
+                          "subtype": "<IDENTITY, TRANSFORMATION, or AGGREGATION for DIRECT type, JOIN, GROUP_BY, FILTER, SORT, WINDOW, CONDITIONAL for INDIRECT type. , if the source field quilifies both as direct and indirect source, prioritize DIRECT and choose appropriate subtype.>",
                           "description": "<transformation formula provided only if 'type' is not 'IDENTITY' - it should show the source column(s) and the operation performed with them, e.g. sum(ammount)>",
                           "masking": "<true (boolean value) if input is hashed or aggregation function like count is used>"
                       }
@@ -679,6 +720,30 @@ Once validated and approved:
 3. Inform user that the ZIP file has been created successfully
 
 ## Column Lineage Best Practices
+
+Understand difference between direct and indirect lineage. 
+
+**DIRECT lineage** - Source column values flow into the output column (possibly transformed):
+- Column calculations/derivations (e.g., price * quantity)
+- Aggregation functions (SUM, AVG, COUNT, MIN, MAX) - use subtype AGGREGATION
+- Data type conversions and string manipulations
+- GROUP BY columns that appear in SELECT - use subtype IDENTITY (the distinct values flow through)
+- Column renames or CASE statements
+
+**INDIRECT lineage** - Source column influences the result but values don't flow to output:
+- WHERE clause filtering conditions (determines which rows are included)
+- JOIN conditions (determines how tables are matched)
+- HAVING clause conditions (filters aggregated results)
+- ORDER BY, PARTITION BY (affects row ordering/grouping but not output values)
+
+**Special Case - GROUP BY Columns:**
+- Columns in both SELECT and GROUP BY: Use DIRECT/IDENTITY (values flow through as distinct values)
+- Columns only in GROUP BY (not in SELECT): Use INDIRECT/GROUP_BY (only influences grouping)
+
+Always document ONLY direct lineage if a particular source acts as both direct and indirect source.
+
+**INCORRECT**: Grouping multiple operations into end-to-end pipelines
+**CORRECT**: One job per independent operation (each PROC SQL, each DATA step, etc.)
 
 **Transformation Types:**
 - `IDENTITY`: Direct copy, no transformation

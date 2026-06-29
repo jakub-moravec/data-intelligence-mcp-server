@@ -344,20 +344,19 @@ Does this match your understanding? Are there any corrections needed?
 JobEvents document static job lineage without execution-specific run information.
 
 **Required Fields:**
-- `eventType`: "COMPLETE" (for static job documentation)
 - `eventTime`: ISO-8601 current timestamp
 - `job`: Object with namespace, name, and facets
 - `producer`: "https://github.com/IBM/data-intelligence-mcp-server"
 
 **Key Characteristics:**
 - NO `run` object (distinguishes JobEvent from RunEvent)
+- NO `eventType`(irrelevant for JobEvent)
 - Includes `inputs` and `outputs` arrays
 - Job facets include documentation and jobType
 
 **Example Structure:**
 ```json
 {
-  "eventType": "COMPLETE",
   "eventTime": "2024-01-15T10:00:00.000Z",
   "job": {
     "namespace": "<job-namespace>",
@@ -531,7 +530,6 @@ Build the JSON structure following this template:
 
 ```json
 {
-  "eventType": "COMPLETE",
   "eventTime": "<current-ISO-8601-timestamp>",
   "job": {
     "namespace": "<job-namespace>",
@@ -670,10 +668,10 @@ Before setting namespace values, verify hostname and port are:
 ### Step 4: Validate the Generated JSON
 
 **Structure Validation:**
-- ✓ eventType is "COMPLETE"
 - ✓ eventTime is valid ISO-8601 format
 - ✓ job object exists with namespace and name
 - ✓ NO "run" object present (critical for JobEvent)
+- ✓ NO "eventType" is present (irrelevant for JobEvent)
 
 **Content Validation:**
 - ✓ All namespaces follow naming conventions from https://openlineage.io/docs/spec/naming
@@ -783,7 +781,6 @@ All generated JobEvents must validate against: https://github.com/OpenLineage/Op
 - Must NOT have `run` object
 
 ### Pre-Ingestion Checklist
-- [ ] eventType is "COMPLETE"
 - [ ] eventTime in ISO-8601 format
 - [ ] job.namespace defined in format `technology://host:port`
 - [ ] job.name defined

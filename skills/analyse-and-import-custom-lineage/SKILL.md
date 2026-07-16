@@ -125,7 +125,8 @@ Understand difference between direct and indirect lineage.
 - Data type conversions and string manipulations
 - GROUP BY columns that appear in SELECT - use subtype IDENTITY (the distinct values flow through)
 - Column renames or CASE statements
-- Relevant transformation types:
+- Use `type` DIRECT for these cases
+- Relevant transformation subtypes:
    - `IDENTITY`: Direct copy, no transformation
    - `AGGREGATION`: Data is aggregated using functions like sum or count
    - `TRANSFORMATION`: Calculation or complex logic
@@ -135,6 +136,14 @@ Understand difference between direct and indirect lineage.
 - JOIN conditions (determines how tables are matched)
 - HAVING clause conditions (filters aggregated results)
 - ORDER BY, PARTITION BY (affects row ordering/grouping but not output values)
+- Use `type` INDIRECT for these cases
+- Relevant transformation subtypes:
+   - `JOIN` - input used in join condition
+   - `GROUP_BY` - output is aggregated based on input (e.g. GROUP BY clause)
+   - `FILTER` - input used as a filtering condition (e.g. WHERE clause)
+   - `SORT` - output is sorted based on input field (e.g. ORDER BY clause)
+   - `WINDOW` - output is windowed based on input field
+   - `CONDITIONAL` - input value is used in IF, CASE WHEN or COALESCE statements
 
 **Special Case - GROUP BY Columns:**
 - Columns in both SELECT and GROUP BY: Use DIRECT/IDENTITY (values flow through as distinct values)
@@ -316,7 +325,7 @@ Be specific about calculations if information is available.
     - name: Based on the processed inputs, formatted according to the naming conventions
     - all relevant facets (schema, hierarchy, dataSource, columnLineage)
 
-  Save the JSON to a file named: `custom_lineage_events/<job-namespace>_<job-name>_jobevent.json`, replace all special characters like slashes and colons by underscores
+  Save the JSON to a file named: `<job-namespace>_<job-name>_jobevent.json`, replace all special characters like slashes and colons by underscores
 </step>
 <step>
   Validate the Generated JSON
@@ -356,6 +365,7 @@ Be specific about calculations if information is available.
 ## Prepering events for ingestion to watsonx.data intelligence
 
 <step>
-  Package the generated JobEvent file(s) into a ZIP file for MDI ingestion.
+  Package the generated JobEvent JSON file(s) into a ZIP file for MDI ingestion.
+  Make sure not to include any other files generated during the analysis (MD files and others). 
   Inform user that the ZIP file has been created successfully and validation passed.
 </step>

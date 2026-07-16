@@ -480,11 +480,28 @@ Column Mappings: <count> mappings defined
 Does this look correct?
 ```
 
-### Step 6: Save the JobEvent and Prepare ZIP File
+### Step 6: Run Automated Validation
+Before packaging, run the automated validation script to ensure all JobEvents are valid:
+
+Run the validation script on all generated JobEvent files:
+```bash
+python skills/analyse-and-import-custom-lineage/scripts/validate_jobevent.py <jobevent_file.json>
+```
+
+Or validate all JSON files in a directory:
+```bash
+python skills/analyse-and-import-custom-lineage/scripts/validate_jobevent.py <directory_path>
+```
+
+- If ALL validations pass: Proceed to Step 7
+- If ANY validation fails: Fix the issues in the JSON files and re-run validation
+
+### Step 7: Save the JobEvent and Prepare ZIP File
 Once validated and approved:
 1. Save the JSON to a file named: `<job-namespace>_<job-name>_jobevent.json`, replace all special characters like slashes and colons by underscores
-2. Package the JobEvent file(s) into a ZIP file for MDI ingestion
-3. Inform user that the ZIP file has been created successfully
+2. Run the validation script (Step 6) to ensure all JobEvents are valid
+3. Package the JobEvent file(s) into a ZIP file for MDI ingestion
+4. Inform user that the ZIP file has been created successfully and validation passed
 
 ## Column Lineage Best Practices
 

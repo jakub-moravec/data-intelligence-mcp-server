@@ -68,6 +68,12 @@
             }
           ]
         },
+        "dataSource": {
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DataSourceDatasetFacet.json",
+          "name": "<source-system-name>",
+          "uri": "<connection-uri>"
+        },
         "hierarchy": {
           "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
           "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",

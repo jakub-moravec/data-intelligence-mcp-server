@@ -9,9 +9,19 @@ description: Use this skill to help users document custom lineage in watsonx.dat
 - OpenLineage JobEvent payload generation
 - Lineage visualization and validation
 
-## CRITICAL RULE: Never Invent Technical Details
+## Common Guidelines for Using This Skill
 
-**MANDATORY REQUIREMENT:** If the source code, documentation, or user input does NOT explicitly contain:
+The purpose of this skill is process the inputs users provide, identify data lineage entities (datasets and job), data lineage relationships, capture additional context metadata, and generate OpenLineage JobEvent payloads representing all of this information.
+
+### Never Invent Technical Details
+
+The skill should document lineage at the maximum granularity based on the provided inputs, but never invent any information that isn't explicitly provided in the user's input.
+
+### Identify data source and target coordinates precisely
+
+Technology, hostname, and port number are critical for system identification and cross-system lineage stitching. 
+
+If the source code, documentation, or user input does NOT explicitly contain:
 - Hostnames
 - Port numbers
 - Connection strings
@@ -22,24 +32,6 @@ description: Use this skill to help users document custom lineage in watsonx.dat
 1. **STOP** processing immediately
 2. **ASK** the user to provide the missing information
 3. **NEVER** invent, assume, or guess these values
-
-## Workflows
-
-### Workflow 1: User-Directed Lineage Documentation
-**When to use:** User knows the lineage structure and can describe it explicitly.
-
-**Process:** Engage in conversation → Generate JobEvents → Present summary → Incorporate feedback → Package ZIP
-
-**Prerequisites:** User has knowledge of source/target systems, transformations, and optionally column mappings.
-
-### Workflow 2: AI-Assisted Lineage Discovery
-**When to use:** User has documentation, diagrams, or code that describes the lineage.
-
-**Process:** Analyze materials → Extract data flows → Propose lineage → Validate with user → Refine → Package ZIP
-
-**Prerequisites:** User can provide relevant documentation/code with sufficient detail and validate discovered lineage.
-
-## Common Guidelines (Apply to Both Workflows)
 
 ### Required Information Collection
 
@@ -85,7 +77,7 @@ description: Use this skill to help users document custom lineage in watsonx.dat
 ### Naming Conventions (Apply to All JobEvents)
 
 **Review Official Conventions:**
-Before creating JobEvents, review generic naming conventions and retrieve official naming conventions for the involved technologies from https://openlineage.io/docs/spec/naming
+Before creating JobEvents, review generic naming conventions and retrieve official naming conventions for the involved technologies from assets/openlineage_naming_conventions.md
 
 **Job Namespaces:**
 - Format: `technology://host:port`
@@ -93,7 +85,7 @@ Before creating JobEvents, review generic naming conventions and retrieve offici
 - Be consistent across related jobs and datasets
 
 **Job Names:**
-- Use known best practices for technologies that have them defined at https://openlineage.io/docs/spec/naming
+- Use known best practices for technologies that have them defined at assets/openlineage_naming_conventions.md
 - Per each technology, check how many segments the name is expected to have and what is their meaning
 - If the job represents a database transformation like a stored procedure or function, follow the defined best practices for the datasets for given technology, and only change the last name segment to the name of the transformation (Example for Oracle stored procedure: `schema.storedprocedure`)
 - Use qualified names: `project.job`, `directory.script`, `database.schema.storedprocedure`
@@ -101,13 +93,13 @@ Before creating JobEvents, review generic naming conventions and retrieve offici
 - Include full path for clarity
 
 **Dataset Namespaces:**
-- Use known best practices from https://openlineage.io/docs/spec/naming
+- Use known best practices from assets/openlineage_naming_conventions.md
 - Where not defined, use common pattern: `technology://host:port`
 - Examples: `mysql://production:8080`, `awsathena://athena.dallas.amazonaws.com`
 - Be consistent across related jobs and datasets
 
 **Dataset Names:**
-- Use known best practices from https://openlineage.io/docs/spec/naming
+- Use known best practices from assets/openlineage_naming_conventions.md
 - Per each technology, check how many segments the name is expected to have and what is their meaning
 - Use qualified names: `database.schema.table`, `schema.table`, `folder.file`
 - Examples: `crm.public.customers`, `staging.orders`
@@ -150,15 +142,28 @@ Does this look correct?
 - Ask questions if anything is unclear
 ```
 
-### Error Handling (Apply to Both Workflows)
+### Error Handling 
+- Always request missing required information before proceeding
+- Ask for verification when data appears invalid or inconsistent
+- Seek clarification when inputs are ambiguous or have multiple interpretations
 
-**Missing Information:** "I need a bit more information to complete the lineage documentation. Could you provide [specific missing information]?"
+## Workflows
 
-**Invalid Data:** "I noticed [specific issue]. Could you verify [specific field]? For example, [provide example of correct format]."
+### Workflow 1: User-Directed Lineage Documentation
+**When to use:** User knows the lineage structure and can describe it explicitly.
 
-**Ambiguous Inputs:** "I want to make sure I understand correctly. When you say [ambiguous statement], do you mean [interpretation A] or [interpretation B]?"
+**Process:** Engage in conversation → Generate JobEvents → Present summary → Incorporate feedback → Package ZIP
 
-**Incomplete Schemas:** "To create accurate column-level lineage, I need the column names and types for [dataset]. Could you provide those?"
+**Prerequisites:** User has knowledge of source/target systems, transformations, and optionally column mappings.
+
+### Workflow 2: AI-Assisted Lineage Discovery
+**When to use:** User has documentation, diagrams, or code that describes the lineage.
+
+**Process:** Analyze materials → Extract data flows → Propose lineage → Validate with user → Refine → Package ZIP
+
+**Prerequisites:** User can provide relevant documentation/code with sufficient detail and validate discovered lineage.
+
+
 
 ## Workflow 2 Specific: AI-Assisted Lineage Discovery
 
@@ -190,30 +195,7 @@ Does this look correct?
 
 ### Code Analysis Patterns
 
-#### Python Code
-**Look for:**
-1. **Data Reading:** `pd.read_csv()`, `pd.read_sql()`, `spark.read.parquet()` → INPUT datasets
-2. **Data Writing:** `df.to_csv()`, `df.to_sql()`, `df.write.parquet()` → OUTPUT datasets
-3. **Transformations:** `df['total'] = df['price'] * df['quantity']` → Column-level transformations
-4. **Column Mappings:** `df['customer_name'] = df['first_name'] + ' ' + df['last_name']`, `df.rename()` → Column lineage
-
-**Ignore:** Import statements, function definitions without data operations, logging, configuration loading, error handling without data operations
-
-#### SQL Code
-**Look for:**
-1. **SELECT with INSERT/CREATE:** `INSERT INTO target SELECT ... FROM source` → Input: source, Output: target
-2. **CREATE TABLE AS SELECT:** `CREATE TABLE summary AS SELECT ... FROM transactions` → Input: transactions, Output: summary
-3. **Column Transformations:** `SELECT customer_id, UPPER(customer_name) as name, price * quantity as total` → Column mappings with transformations
-
-**Ignore:** DDL without data movement (`CREATE TABLE` schema only), GRANT/REVOKE, SET statements, comments
-
-#### Java/Spark Code
-**Look for:**
-1. **Data Source Connections:** `spark.read().format("jdbc").option("dbtable", "customers").load()` → Input dataset
-2. **Transformations:** `df.withColumn("full_name", concat(col("first_name"), lit(" "), col("last_name")))` → Column transformation
-3. **Data Writes:** `df.write().format("parquet").save("s3://bucket/output")` → Output dataset
-
-**Ignore:** Configuration objects, connection pool setup, exception handling, utility methods without data operations
+Identify the programming language that you are analyzing, and load the relevant lineage guide: references/<programming_language>_lineage_guide.md. Follow the relevant guide. If guide is not available for specific language, extrapolate the principles from the other guides. 
 
 ### Documentation Analysis
 
@@ -314,10 +296,10 @@ Create mappings: `output_column → [input_dataset.input_column] (transformation
 
 **Step 4: Validate Discovered Lineage**
 Ask yourself:
-- ✓ Does data actually move from source to destination?
-- ✓ Is there a clear job/process that performs this movement?
-- ✓ Can I identify the input and output datasets?
-- ✓ Are the column mappings logical and complete?
+- Does data actually move from source to destination?
+- Is there a clear job/process that performs this movement?
+- Can I identify the input and output datasets?
+- Are the column mappings logical and complete?
 - ✗ Am I confusing configuration with data flow?
 - ✗ Am I including operations that don't move data?
 
@@ -342,11 +324,11 @@ Does this match your understanding? Are there any corrections needed?
 
 ### Common Pitfalls to Avoid
 
-1. **False Positive: Configuration Files** - ❌ Don't treat config files as data sources unless they're actually read as data. ✓ Only document if the config data flows into a dataset.
-2. **False Positive: Metadata Operations** - ❌ Schema validation, data profiling, or quality checks aren't lineage. ✓ Only document if data is actually transformed or moved.
-3. **False Positive: Temporary Variables** - ❌ Intermediate variables in code aren't datasets. ✓ Only document persistent datasets (tables, files, topics).
-4. **Missing Context: Incomplete Transformations** - ❌ Don't guess at transformations if not clear in code. ✓ Ask user to clarify ambiguous transformations.
-5. **Over-Specification: Too Much Detail** - ❌ Don't document every line of code. ✓ Focus on data movement and significant transformations.
+1. **False Positive: Configuration Files** - ❌ Don't treat config files as data sources unless they're actually read as data. Only document if the config data flows into a dataset.
+2. **False Positive: Metadata Operations** - ❌ Schema validation, data profiling, or quality checks aren't lineage. Only document if data is actually transformed or moved.
+3. **False Positive: Temporary Variables** - ❌ Intermediate variables in code aren't datasets. Only document persistent datasets (tables, files, topics).
+4. **Missing Context: Incomplete Transformations** - ❌ Don't guess at transformations if not clear in code. Ask user to clarify ambiguous transformations.
+5. **Over-Specification: Too Much Detail** - ❌ Don't document every line of code. Focus on data movement and significant transformations.
 
 ## OpenLineage JobEvent Structure
 
@@ -384,7 +366,7 @@ The following dataset facets should be included in the payload:
 Collect all necessary details through conversation:
 - Understand what are the technologies involved
 - Review the naming conventions in "Common Guidelines" section above
-- Retrieve official naming conventions for the involved technologies from https://openlineage.io/docs/spec/naming
+- Retrieve official naming conventions for the involved technologies from assets/openlineage_naming_conventions.md
 - Job namespace and name (follow naming conventions strictly, use right number of segments with right values)
 - Job description and type (BATCH, STREAMING, etc.)
 - Input datasets (namespace, name, columns, data types) - follow naming conventions strictly
@@ -436,51 +418,8 @@ Before setting namespace values, verify hostname and port are:
 
 ### Step 4: Validate the Generated JSON
 
-**Structure Validation:**
-- ✓ eventTime is valid ISO-8601 format
-- ✓ job object exists with namespace and name
-- ✓ NO "run" object present (critical for JobEvent)
-- ✓ NO "eventType" is present (irrelevant for JobEvent)
 
-**Content Validation:**
-- ✓ All namespaces follow naming conventions from assets/openlineage_naming_conventions.md
-- ✓ All dataset names follow naming conventions from assets/openlineage_naming_conventions.md
-- ✓ `https://github.com/IBM/data-intelligence-mcp-server` is used as the value for all _producer fields
-- ✓ All schema fields have name, and optionally type and description
-- ✓ All columnLineage mappings reference valid input fields
-- ✓ Column names in columnLineage match schema field names
-
-**Facet Validation:**
-- ✓ All facets have _producer and _schemaURL
-- ✓ Schema URLs point to correct OpenLineage spec versions
-- ✓ Hierarchy facets include levels array with name and value for each level
-
-**JSON Syntax:**
-- ✓ Valid JSON syntax (no trailing commas, proper quotes)
-- ✓ All brackets and braces properly closed
-- ✓ No undefined or null values where not allowed
-
-### Step 5: Present for User Review
-Before finalizing, show the user a summary:
-```
-I've prepared the following JobEvent:
-
-Job: <namespace>.<name>
-Description: <description>
-Type: <BATCH|STREAMING>
-
-Inputs:
-  - <namespace>.<dataset> (<column-count> columns)
-
-Outputs:
-  - <namespace>.<dataset> (<column-count> columns)
-
-Column Mappings: <count> mappings defined
-
-Does this look correct?
-```
-
-### Step 6: Run Automated Validation
+**Automated Validation:**
 Before packaging, run the automated validation script to ensure all JobEvents are valid:
 
 Run the validation script on all generated JobEvent files:
@@ -493,10 +432,18 @@ Or validate all JSON files in a directory:
 python skills/analyse-and-import-custom-lineage/scripts/validate_jobevent.py <directory_path>
 ```
 
-- If ALL validations pass: Proceed to Step 7
+**Content Validation:**
+- All namespaces follow naming conventions from assets/openlineage_naming_conventions.md
+- All dataset names follow naming conventions from assets/openlineage_naming_conventions.md
+- All columnLineage mappings reference valid input fields
+- Column names in columnLineage match schema field names
+
+
+- If ALL validations pass: Proceed to Step 5
 - If ANY validation fails: Fix the issues in the JSON files and re-run validation
 
-### Step 7: Save the JobEvent and Prepare ZIP File
+
+### Step 5: Save the JobEvent and Prepare ZIP File
 Once validated and approved:
 1. Save the JSON to a file named: `<job-namespace>_<job-name>_jobevent.json`, replace all special characters like slashes and colons by underscores
 2. Run the validation script (Step 6) to ensure all JobEvents are valid
@@ -554,27 +501,6 @@ Always document ONLY direct lineage if a particular source acts as both direct a
 - Guarantee 100% accuracy in AI-assisted discovery
 
 **When to escalate:** Complex transformations requiring deep technical analysis, systems with proprietary or undocumented formats
-
-## Validation Reference
-
-### OpenLineage Schema Validation
-All generated JobEvents must validate against: https://github.com/OpenLineage/OpenLineage/blob/main/spec/OpenLineage.json
-
-**Key JobEvent Requirements:**
-- Extends BaseEvent (eventType, eventTime, producer)
-- Has required `job` object
-- May have `inputs` and `outputs` arrays
-- Must NOT have `run` object
-
-### Pre-Ingestion Checklist
-- [ ] eventTime in ISO-8601 format
-- [ ] job.namespace defined in format `technology://host:port`
-- [ ] job.name defined
-- [ ] No "run" object present
-- [ ] All namespaces follow conventions (typically in format `technology://host:port`)
-- [ ] Column names match in schema and columnLineage
-- [ ] JSON syntax valid
-- [ ] Validates against OpenLineage JobEvent schema
 
 ### Additional Instructions
 - Do not generate any other file outputs other than the OpenLineage events (JSON files) and the ZIP file.

@@ -1,0 +1,11 @@
+{
+  "sourceCode": {
+      "_producer": "https://some.producer.com/version/1.0",
+      "_schemaURL": "https://github.com/OpenLineage/OpenLineage/blob/main/spec/facets/SourceCodeJobFacet.json",
+      "language": "<language>",
+      "sourceCode": "<source-code>",
+      "sourceCodeFile": "<source-code-file>",
+      "sourceCodeFileLineStart": "<source-code-file-line-start>",
+      "sourceCodeFileLineEnd": "<source-code-file-line-end>"
+  }
+}

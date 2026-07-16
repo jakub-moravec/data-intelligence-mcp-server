@@ -4,16 +4,27 @@
     "namespace": "<job-namespace>",
     "name": "<job-name>",
     "facets": {
-      "documentation": {
-        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DocumentationJobFacet.json",
-        "description": "<job-description>"
-      },
       "jobType": {
         "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
         "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/JobTypeJobFacet.json",
         "processingType": "<BATCH|STREAMING>",
-        "integration": "IBM watsonx.data intelligence custom lineage"
+        "integration": "IBM watsonx.data intelligence custom lineage",
+        "jobType": "<job type - what does this OpenLineage Job represent?>"
+      },
+      "documentation": {
+        "_producer": "https://some.producer.com/version/1.0",
+        "_schemaURL": "https://github.com/OpenLineage/OpenLineage/blob/main/spec/facets/DocumentationJobFacet.json",
+        "description": "<1-2 sentences describing the job's purpose> <AI disclaimer and source information>",
+        "contentType": "text/markdown"
+      },
+      "sourceCode": {
+        "_producer": "https://some.producer.com/version/1.0",
+        "_schemaURL": "https://github.com/OpenLineage/OpenLineage/blob/main/spec/facets/SourceCodeJobFacet.json",
+        "language": "<language>",
+        "sourceCode": "<source-code>",
+        "sourceCodeFile": "<source-code-file>",
+        "sourceCodeFileLineStart": "<source-code-file-line-start>",
+        "sourceCodeFileLineEnd": "<source-code-file-line-end>"
       }
     }
   },

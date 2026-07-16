@@ -149,10 +149,10 @@ Understand difference between direct and indirect lineage.
 - Columns in both SELECT and GROUP BY: Use DIRECT/IDENTITY (values flow through as distinct values)
 - Columns only in GROUP BY (not in SELECT): Use INDIRECT/GROUP_BY (only influences grouping)
 
-Always document ONLY direct lineage if a particular source acts as both direct and indirect source.
-Always include transformationDescription unless the transformation type is `IDENTITY`
-List all inputFields that contribute to output.
-Be specific about calculations if information is available.
+NEVER include two transformations for the same column. If both direct and indirect transformations exist, document only the direct one.
+ALWAYS include transformationDescription unless the transformation type is `IDENTITY`
+ALWAYS list all inputFields that contribute to output.
+ALWAYS provide specific calculations if information is available.
 
 ### Error Handling 
 - Always request missing required information before proceeding

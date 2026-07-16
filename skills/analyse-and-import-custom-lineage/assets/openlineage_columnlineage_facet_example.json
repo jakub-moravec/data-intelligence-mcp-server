@@ -1,0 +1,40 @@
+{
+  "columnLineage": {
+    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/ColumnLineageDatasetFacet.json",
+    "fields": {
+      "customer_id": {
+        "inputFields": [
+          {
+            "namespace": "<source-dataset-namespace>",
+            "name": "<source-dataset-name>",
+            "field": "cust_id",
+            "transformations": [
+                {
+                    "type": "DIRECT",
+                    "subType": "IDENTITY"
+                }
+            ]
+          }
+        ]
+      },
+      "customer_account_number": {
+        "inputFields": [
+          {
+            "namespace": "<source-dataset-namespace>",
+            "name": "<source-dataset-name>",
+            "field": "cust_account",
+            "transformations": [
+                {
+                    "type": "DIRECT",
+                    "subtype": "TRANSFORMATION",
+                    "description": "replace(cust_account, 'xxx')",
+                    "masking": true
+                }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

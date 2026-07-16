@@ -1,0 +1,13 @@
+{
+  "schema": {
+    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SchemaDatasetFacet.json",
+    "fields": [
+      {
+        "name": "customer_id",
+        "type": "INTEGER",
+        "description": "Unique customer identifier"
+      }
+    ]
+  }
+}

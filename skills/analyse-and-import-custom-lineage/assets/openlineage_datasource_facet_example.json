@@ -1,0 +1,8 @@
+{
+  "dataSource": {
+    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DataSourceDatasetFacet.json",
+    "name": "CRM Database",
+    "uri": "jdbc:oracle:thin:@crm-host:1521:CRMDB"
+  }
+}

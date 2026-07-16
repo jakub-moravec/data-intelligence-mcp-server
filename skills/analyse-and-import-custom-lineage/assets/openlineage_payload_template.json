@@ -1,0 +1,108 @@
+{
+  "eventTime": "<current-ISO-8601-timestamp>",
+  "job": {
+    "namespace": "<job-namespace>",
+    "name": "<job-name>",
+    "facets": {
+      "documentation": {
+        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DocumentationJobFacet.json",
+        "description": "<job-description>"
+      },
+      "jobType": {
+        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/JobTypeJobFacet.json",
+        "processingType": "<BATCH|STREAMING>",
+        "integration": "IBM watsonx.data intelligence custom lineage"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "namespace": "<input-namespace>",
+      "name": "<input-dataset-name>",
+      "facets": {
+        "schema": {
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SchemaDatasetFacet.json",
+          "fields": [
+            {
+              "name": "<field-name>",
+              "type": "<field-type>",
+              "description": "<field-description>"
+            }
+          ]
+        },
+        "dataSource": {
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DataSourceDatasetFacet.json",
+          "name": "<source-system-name>",
+          "uri": "<connection-uri>"
+        },
+        "hierarchy": {
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
+          "hierarchy": [
+            {
+              "type": "<level-type-name>",
+              "name": "<level-object-name>"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "namespace": "<output-namespace>",
+      "name": "<output-dataset-name>",
+      "facets": {
+        "schema": {
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SchemaDatasetFacet.json",
+          "fields": [
+            {
+              "name": "<field-name>",
+              "type": "<field-type>",
+              "description": "<field-description>"
+            }
+          ]
+        },
+        "hierarchy": {
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
+          "hierarchy": [
+            {
+              "type": "<level-name>",
+              "name": "<level-value>"
+            }
+          ]
+        },
+        "columnLineage": {
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/ColumnLineageDatasetFacet.json",
+          "fields": {
+            "<output-field-name>": {
+              "inputFields": [
+                {
+                  "namespace": "<input-namespace>",
+                  "name": "<input-dataset>",
+                  "field": "<input-field>",
+                  "transformations": [
+                      {
+                          "type": "<DIRECT or INDIRECT, if the source field quilifies both as direct and indirect source, prioritize DIRECT>",
+                          "subtype": "<IDENTITY, TRANSFORMATION, or AGGREGATION for DIRECT type, JOIN, GROUP_BY, FILTER, SORT, WINDOW, CONDITIONAL for INDIRECT type. , if the source field quilifies both as direct and indirect source, prioritize DIRECT and choose appropriate subtype.>",
+                          "description": "<transformation formula provided only if 'type' is not 'IDENTITY' - it should show the source column(s) and the operation performed with them, e.g. sum(ammount)>",
+                          "masking": "<true (boolean value) if input is hashed or aggregation function like count is used>"
+                      }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "producer": "https://github.com/IBM/data-intelligence-mcp-server"
+}

@@ -1,0 +1,20 @@
+{
+  "hierarchy": {
+    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
+    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
+    "hierarchy": [
+      {
+        "type": "database",
+        "name": "CRMDB"
+      },
+      {
+        "type": "schema",
+        "name": "public"
+      },
+      {
+        "type": "table",
+        "name": "customers"
+      }
+    ]
+  }
+}

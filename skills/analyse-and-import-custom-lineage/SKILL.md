@@ -179,6 +179,15 @@ Does this look correct?
 - Control flow logic without data movement (if/else, loops without data operations)
 - Comments or documentation text (unless describing actual data flows)
 
+### Input processing methodology
+- Bellow, in Code Analysis Patters, we define what to look for when searching for lineage
+- When presented with a set of code inputs (scripts, programs, etc), proceed in the following way
+   - Process each file independently
+   - For each file, first identify what transformation entities it contains (stored procedures, sql statements, file movement commands, etc). 
+   - Create a list of the transformations you will analyse in a separate file. At the top add a count of number of occurances for each transformation type. You will use this as a counter. Bellow, list all of them (provide transformation type and location in the file). You will use this as a todo-list.
+   - The proceed to analysing each of these transformation one-by-one, and create an OpenLineage payload for each relevant transformation. 
+   - Track the progress in your progress file.  
+
 ### Code Analysis Patterns
 
 #### Python Code
@@ -354,149 +363,20 @@ JobEvents document static job lineage without execution-specific run information
 - Includes `inputs` and `outputs` arrays
 - Job facets include documentation and jobType
 
-**Example Structure:**
-```json
-{
-  "eventTime": "2024-01-15T10:00:00.000Z",
-  "job": {
-    "namespace": "<job-namespace>",
-    "name": "<job-name>",
-    "facets": {
-      "documentation": {
-        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DocumentationJobFacet.json",
-        "description": "Syncs customer data from CRM to warehouse"
-      },
-      "jobType": {
-        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/JobTypeJobFacet.json",
-        "processingType": "BATCH",
-        "integration": "IBM watsonx.data intelligence custom lineage"
-      }
-    }
-  },
-  "inputs": [...],
-  "outputs": [...],
-  "producer": "https://github.com/IBM/data-intelligence-mcp-server"
-}
-```
+See the structure of the Job Event in assets/openlineage_payload_template.json. 
+
 
 ### Dataset Facets
+The following dataset facets should be included in the payload:
+- `SchemaDatasetFacet` (inputs and outputs, provide whenever you have information about columns, reference: assets/openlineage_schema_facet_example.json)
+- `DataSourceDatasetFacet` (inputs and outputs, provide always to capture details of the datasource, reference: assets/openlineage_datasource_facet_example.json)
+- `HierarchyDatasetFacet` (inputs and outputs, provide always to capture the names and types of dataset parent entities, reference: assets/openlineage_hierarchy_facet_example.json). Common hierarchy levels are below, but always reflect the actual hierarchy based on what you know about the dataset.
+  - Relational Databases (3 levels): database → schema → table (Example: `CRMDB` → `public` → `customers`)
+  - Cloud Storage (variable levels): bucket → folder → subfolder → file (Example: `my-bucket` → `data` → `2024` → `customers.parquet`)
+  - Data Warehouses (3-4 levels): warehouse → database → schema → table (Example: `prod-warehouse` → `analytics` → `public` → `sales`)
+  - File Systems (variable levels): volume → directory → subdirectory → file (Example: `/data` → `raw` → `crm` → `customers.csv`)
+- `ColumnLineageFacet` (outputs only, provide provide whenever column lineage information is known, reference: assets/openlineage_columnlineage_facet_example.json).  
 
-**Schema Facet:**
-```json
-{
-  "schema": {
-    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SchemaDatasetFacet.json",
-    "fields": [
-      {
-        "name": "customer_id",
-        "type": "INTEGER",
-        "description": "Unique customer identifier"
-      }
-    ]
-  }
-}
-```
-
-**DataSource Facet (for inputs):**
-```json
-{
-  "dataSource": {
-    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DataSourceDatasetFacet.json",
-    "name": "CRM Database",
-    "uri": "jdbc:oracle:thin:@crm-host:1521:CRMDB"
-  }
-}
-```
-
-**Hierarchy Facet (for both inputs and outputs):**
-```json
-{
-  "hierarchy": {
-    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
-    "hierarchy": [
-      {
-        "type": "database",
-        "name": "CRMDB"
-      },
-      {
-        "type": "schema",
-        "name": "public"
-      },
-      {
-        "type": "table",
-        "name": "customers"
-      }
-    ]
-  }
-}
-```
-
-**Understanding Hierarchy Facet:**
-
-The hierarchy facet describes the organizational structure of a dataset within its system, representing the path from top-level container to specific dataset.
-
-**Common Hierarchy Patterns:**
-1. **Relational Databases (3 levels):** database → schema → table (Example: `CRMDB` → `public` → `customers`)
-2. **Cloud Storage (variable levels):** bucket → folder → subfolder → file (Example: `my-bucket` → `data` → `2024` → `customers.parquet`)
-3. **Data Warehouses (3-4 levels):** warehouse → database → schema → table (Example: `prod-warehouse` → `analytics` → `public` → `sales`)
-4. **File Systems (variable levels):** volume → directory → subdirectory → file (Example: `/data` → `raw` → `crm` → `customers.csv`)
-
-**When to Use:** Always include for datasets with clear organizational structure. Helps with dataset discovery, navigation, filtering, and grouping in lineage visualization.
-
-**Best Practices:**
-- Use consistent level names across similar systems (e.g., always use "schema" not "schemaName")
-- Order levels from highest to lowest (most general to most specific)
-- Include all meaningful levels (don't skip intermediate levels)
-- Use actual values from the system, not placeholders
-
-**ColumnLineage Facet (for outputs):**
-```json
-{
-  "columnLineage": {
-    "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-    "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/ColumnLineageDatasetFacet.json",
-    "fields": {
-      "customer_id": {
-        "inputFields": [
-          {
-            "namespace": "<source-dataset-namespace>",
-            "name": "<source-dataset-name>",
-            "field": "cust_id",
-            "transformations": [
-                {
-                    "type": "DIRECT",
-                    "subType": "IDENTITY"
-                }
-            ]
-          }
-        ]
-      },
-      "customer_account_number": {
-        "inputFields": [
-          {
-            "namespace": "<source-dataset-namespace>",
-            "name": "<source-dataset-name>",
-            "field": "cust_account",
-            "transformations": [
-                {
-                    "type": "DIRECT",
-                    "subtype": "TRANSFORMATION",
-                    "description": "replace(cust_account, 'xxx')",
-                    "masking": true
-                }
-            ]
-          }
-        ]
-      }
-    }
-  }
-}
-```
 
 ## JobEvent Creation Instructions
 
@@ -526,118 +406,7 @@ Before proceeding to Step 2, verify you have ACTUAL values (not invented) for:
 ### Step 2: Construct the JobEvent JSON
 Generate one Job event per job. Each Job event should be captured in a separate JSON document. 
 
-Build the JSON structure following this template:
-
-```json
-{
-  "eventTime": "<current-ISO-8601-timestamp>",
-  "job": {
-    "namespace": "<job-namespace>",
-    "name": "<job-name>",
-    "facets": {
-      "documentation": {
-        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DocumentationJobFacet.json",
-        "description": "<job-description>"
-      },
-      "jobType": {
-        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/JobTypeJobFacet.json",
-        "processingType": "<BATCH|STREAMING>",
-        "integration": "IBM watsonx.data intelligence custom lineage"
-      }
-    }
-  },
-  "inputs": [
-    {
-      "namespace": "<input-namespace>",
-      "name": "<input-dataset-name>",
-      "facets": {
-        "schema": {
-          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SchemaDatasetFacet.json",
-          "fields": [
-            {
-              "name": "<field-name>",
-              "type": "<field-type>",
-              "description": "<field-description>"
-            }
-          ]
-        },
-        "dataSource": {
-          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DataSourceDatasetFacet.json",
-          "name": "<source-system-name>",
-          "uri": "<connection-uri>"
-        },
-        "hierarchy": {
-          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
-          "hierarchy": [
-            {
-              "type": "<level-type-name>",
-              "name": "<level-object-name>"
-            }
-          ]
-        }
-      }
-    }
-  ],
-  "outputs": [
-    {
-      "namespace": "<output-namespace>",
-      "name": "<output-dataset-name>",
-      "facets": {
-        "schema": {
-          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/SchemaDatasetFacet.json",
-          "fields": [
-            {
-              "name": "<field-name>",
-              "type": "<field-type>",
-              "description": "<field-description>"
-            }
-          ]
-        },
-        "hierarchy": {
-          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/HierarchyDatasetFacet.json",
-          "hierarchy": [
-            {
-              "type": "<level-name>",
-              "name": "<level-value>"
-            }
-          ]
-        },
-        "columnLineage": {
-          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
-          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/ColumnLineageDatasetFacet.json",
-          "fields": {
-            "<output-field-name>": {
-              "inputFields": [
-                {
-                  "namespace": "<input-namespace>",
-                  "name": "<input-dataset>",
-                  "field": "<input-field>",
-                  "transformations": [
-                      {
-                          "type": "<DIRECT or INDIRECT, if the source field quilifies both as direct and indirect source, prioritize DIRECT>",
-                          "subtype": "<IDENTITY, TRANSFORMATION, or AGGREGATION for DIRECT type, JOIN, GROUP_BY, FILTER, SORT, WINDOW, CONDITIONAL for INDIRECT type. , if the source field quilifies both as direct and indirect source, prioritize DIRECT and choose appropriate subtype.>",
-                          "description": "<transformation formula provided only if 'type' is not 'IDENTITY' - it should show the source column(s) and the operation performed with them, e.g. sum(ammount)>",
-                          "masking": "<true (boolean value) if input is hashed or aggregation function like count is used>"
-                      }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      }
-    }
-  ],
-  "producer": "https://github.com/IBM/data-intelligence-mcp-server"
-}
-```
+Build the JSON structure following the template stored in file assets/openlineage_payload_template.json
 
 ### Step 3: Populate All Fields
 
@@ -674,9 +443,9 @@ Before setting namespace values, verify hostname and port are:
 - ✓ NO "eventType" is present (irrelevant for JobEvent)
 
 **Content Validation:**
-- ✓ All namespaces follow naming conventions from https://openlineage.io/docs/spec/naming
-- ✓ All dataset names follow naming conventions from https://openlineage.io/docs/spec/naming
-- ✓ https://github.com/IBM/data-intelligence-mcp-server is used as the value for all _producer fields
+- ✓ All namespaces follow naming conventions from assets/openlineage_naming_conventions.md
+- ✓ All dataset names follow naming conventions from assets/openlineage_naming_conventions.md
+- ✓ `https://github.com/IBM/data-intelligence-mcp-server` is used as the value for all _producer fields
 - ✓ All schema fields have name, and optionally type and description
 - ✓ All columnLineage mappings reference valid input fields
 - ✓ Column names in columnLineage match schema field names

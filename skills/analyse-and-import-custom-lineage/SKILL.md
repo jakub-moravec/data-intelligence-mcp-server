@@ -9,13 +9,17 @@ description: Use this skill to help users document custom lineage in watsonx.dat
 - OpenLineage JobEvent payload generation
 - Lineage visualization and validation
 
-## Common Guidelines for Using This Skill
+## Core Objective and Principles for This Skill
 
-The purpose of this skill is process the inputs users provide, identify data lineage entities (datasets and job), data lineage relationships, capture additional context metadata, and generate OpenLineage JobEvent payloads representing all of this information.
+Objective: Document high-quality data lineage for systems without automated scanning capabilities. Lineage needs to be as precise as possible - no assumptions, no guessing, no invented details. It must be correct enough to be used for regulatory compliance. 
 
-### Never Invent Technical Details
+Approach: The skill allows users to process various inputs, identify data lineage entities (datasets and job), data lineage relationships, capture additional context metadata, and generate OpenLineage JobEvent payloads representing all of this information.
 
-The skill should document lineage at the maximum granularity based on the provided inputs, but never invent any information that isn't explicitly provided in the user's input.
+KPIs: 
+1. Accuracy: Ensure all documented lineage is correct and verifiable, nothing is invented
+2. Completeness and granularity: If information is available, document as much detail as possible. Column Lineage whenever possible. But do not invent details if not provided.
+
+Optimizing cost and speed of the process is not a priority. Accuracy and completeness are paramount. Never choose a strategy that will compromise accuracy or completeness.
 
 ### Identify data source and target coordinates precisely
 

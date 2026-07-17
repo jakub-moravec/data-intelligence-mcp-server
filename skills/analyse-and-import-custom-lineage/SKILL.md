@@ -228,11 +228,21 @@ ALWAYS provide specific calculations if information is available.
 </step>
 
 <step>
+  Understand the language structure. The language guide operates with 3 entities 
+  - Transformation - the code that moves the data
+  - Dataset - the definitions or locations of where data is read from/written to
+  - Context - the code that is not a transformation, but needs to be evaluated to correctly interpret the transformation logic or it's source and target datasets
+</step>
+
+<step>
+  Process the code to construct initial context, store it in a JSON file. Include information about when context is set. If the context configuration is changed later, also include information when that context value is no longer relevant, and store the same information for the new context value. 
+  Store and continuously update the context in file context.json. 
+</step>
+
+<step>
   Identify transformations  
 
-  - Process each source code file independently
-  - Even if individual file is large, make sure to process is thoroughly and identify every single transformation in it. NEVER use large file reading strategies.
-  - For each file, first identify what transformation entities it contains 
+  - Process each source code file methodically and thoroughly, statement by statement. Even if individual file is large, make sure to process is thoroughly and identify every single transformation. NEVER use large file reading strategies. NEVER generate scripts to try to automate the processing. 
   - Create a list of all transformations first, and store it in a separate file. Uset the template in assets/transfomraiton_analysis_tracker.md 
 </step>
 
@@ -240,6 +250,8 @@ ALWAYS provide specific calculations if information is available.
   Process each transformation
 
   - Proceed to analysing each of these transformation one-by-one
+  - Make sure to evaluate relevant context stored in context.json
+  - Read and semantically evaluate each transformation independently. NEVER use large file reading strategies. NEVER generate scripts to try to automate the processing. 
   - Follow the steps described in section JobEvent Creation Instructions to create an OpenLineage payload for each relevant transformation 
   - Track the progress in your progress file 
 </step>

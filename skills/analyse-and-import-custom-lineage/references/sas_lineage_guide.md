@@ -1,5 +1,57 @@
 # SAS Data Lineage Analysis Guide
 
+## What is considered Context
+
+Statements that set execution environment but don't move data. Context affects how subsequent data movements are interpreted.
+
+## Context-Setting Statements
+
+- `LIBNAME` - Library definitions
+- `%LET` - Macro variables  
+- `FILENAME` - File references
+- `OPTIONS` - System settings
+- `%INCLUDE` - Code includes
+- `%MACRO` - Macro definitions
+
+## Context Storage
+
+```json
+context = {
+    "libraries": {
+        "MYLIB": [
+            {"line": 1, "value": "/data/mylib"},
+            {"line": 150, "value": "/data/elsewhere/mylib"}
+        ]
+    },
+    "macro_vars": {
+        "data_path": [
+            {"line": 2, "value": "/data/input"},
+            {"line": 152, "value": "/data/elsewhere/input2"}
+        ]
+    },
+    "filerefs": {"INDATA": [
+            {"line": 3, "value": "/data/file.csv"},
+            {"line": 155, "value": "/data/external/filex.csv"},
+            {"line": 159, "value": "/data/2/filez.csv"}
+        ]
+    }
+}
+```
+
+## Context handling Workflow
+
+1. **Initialize** - Scan file start for initial context
+2. **Process line-by-line**:
+   - If context statement → Update context, increment version
+   - If data movement → Resolve references using current context
+3. **Resolve** - Replace `&var`, `libref.table`, `fileref` with actual values
+
+- **Don't assume static context** - Always check for changes
+- **Version context** - Track changes by referencing line numbers
+- **Resolve all references** - Use context before generating lineage
+- **Analyze %INCLUDE files** - They may contain critical context
+- **Document context version** - Reference in lineage metadata
+
 ## What is Considered a Transformation
 
 In SAS, a **transformation** is any operation that reads data from one or more sources and writes it to a destination, potentially modifying the data in the process. SAS uses DATA steps and PROC steps for data manipulation.

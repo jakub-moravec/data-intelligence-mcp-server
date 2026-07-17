@@ -39,7 +39,7 @@
           "fields": [
             {
               "name": "<field-name>",
-              "type": "<field-type>",
+              "type": "<field-type, do not provide if unknown>",
               "description": "<field-description>"
             }
           ]
@@ -74,7 +74,7 @@
           "fields": [
             {
               "name": "<field-name>",
-              "type": "<field-type>",
+              "type": "<field-type, do not provide if unknown>",
               "description": "<field-description>"
             }
           ]

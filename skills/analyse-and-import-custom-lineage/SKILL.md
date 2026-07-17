@@ -231,6 +231,7 @@ ALWAYS provide specific calculations if information is available.
   Identify transformations  
 
   - Process each source code file independently
+  - Even if individual file is large, make sure to process is thoroughly and identify every single transformation in it. NEVER use large file reading strategies.
   - For each file, first identify what transformation entities it contains 
   - Create a list of all transformations first, and store it in a separate file. Uset the template in assets/transfomraiton_analysis_tracker.md 
 </step>
@@ -335,6 +336,8 @@ ALWAYS provide specific calculations if information is available.
     - all relevant facets (schema, hierarchy, dataSource, columnLineage)
 
   Save the JSON to a file named: `<job-namespace>_<job-name>_jobevent.json`, replace all special characters like slashes and colons by underscores
+
+  ALWAYS create a single JSON file per JobEvent. Never use batches of events.
 </step>
 <step>
   Validate the Generated JSON
@@ -351,6 +354,8 @@ ALWAYS provide specific calculations if information is available.
   ```bash
   python skills/analyse-and-import-custom-lineage/scripts/validate_jobevent.py <directory_path>
   ```
+
+  ALWAYS adress any validation failure before proceding further. Never ignore any failer as it will lead to ingestion errors.
 
   **Content Validation:**
   - All namespaces follow naming conventions from assets/openlineage_naming_conventions.md

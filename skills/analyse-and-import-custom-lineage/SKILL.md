@@ -171,6 +171,10 @@ ALWAYS provide specific calculations if information is available.
 - Ask for verification when data appears invalid or inconsistent
 - Seek clarification when inputs are ambiguous or have multiple interpretations
 
+### Communication style
+- Don't produce unnecessary documents, only what the skill outlines
+- Keep communication concise
+
 ### Limitations
 
 **What the agent CAN do:**
@@ -254,10 +258,15 @@ ALWAYS provide specific calculations if information is available.
   Process each transformation
 
   - Proceed to analysing each of these transformation one-by-one
+  - Never skip any transformation
   - Make sure to evaluate relevant context stored in context.json
   - Read and semantically evaluate each transformation independently. NEVER use large file reading strategies. NEVER generate scripts to try to automate the processing. 
   - Follow the steps described in section JobEvent Creation Instructions to create an OpenLineage payload for each relevant transformation 
   - Track the progress in your progress file 
+</step>
+
+<step>
+  Validate you created as many OpenLineage events as you identified transformations. 
 </step>
 
 <step>

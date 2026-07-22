@@ -291,23 +291,43 @@ class JobEventValidator:
         
         # Validate hierarchy structure if present
         if has_hierarchy:
-            hierarchy = facets["hierarchy"]
-            if "levels" in hierarchy and isinstance(hierarchy["levels"], list):
-                for level in hierarchy["levels"]:
-                    has_name = "name" in level
-                    has_value = "value" in level
-                    if not (has_name and has_value):
+            hierarchy_facet = facets["hierarchy"]
+            
+            # Check for nested "hierarchy" key (required structure)
+            if "hierarchy" not in hierarchy_facet:
+                self.results.append(ValidationResult(
+                    f"Dataset Facet - {dataset_name} - hierarchy structure",
+                    False,
+                    "Hierarchy facet missing nested 'hierarchy' key"
+                ))
+            elif not isinstance(hierarchy_facet["hierarchy"], list):
+                self.results.append(ValidationResult(
+                    f"Dataset Facet - {dataset_name} - hierarchy structure",
+                    False,
+                    "Nested 'hierarchy' must be a list"
+                ))
+            else:
+                hierarchy_list = hierarchy_facet["hierarchy"]
+                all_valid = True
+                
+                for idx, entry in enumerate(hierarchy_list):
+                    has_type = "type" in entry
+                    has_name = "name" in entry
+                    
+                    if not has_type or not has_name:
                         self.results.append(ValidationResult(
-                            f"Dataset Facet - {dataset_name} - hierarchy.levels",
+                            f"Dataset Facet - {dataset_name} - hierarchy[{idx}]",
                             False,
-                            "Hierarchy level missing 'name' or 'value'"
+                            f"Hierarchy entry missing required 'type' or 'name' field"
                         ))
+                        all_valid = False
                         break
-                else:
+                
+                if all_valid:
                     self.results.append(ValidationResult(
-                        f"Dataset Facet - {dataset_name} - hierarchy.levels",
+                        f"Dataset Facet - {dataset_name} - hierarchy structure",
                         True,
-                        f"All {len(hierarchy['levels'])} hierarchy levels valid"
+                        f"All {len(hierarchy_list)} hierarchy entries valid (each has 'type' and 'name')"
                     ))
         
         # Check for columnLineage facet (outputs only)

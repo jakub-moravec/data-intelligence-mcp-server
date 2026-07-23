@@ -25,6 +25,17 @@
         "sourceCodeFile": "<source-code-file>",
         "sourceCodeFileLineStart": "<source-code-file-line-start>",
         "sourceCodeFileLineEnd": "<source-code-file-line-end>"
+      },
+      "tags": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.38.0/integration/spark",
+          "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/TagsJobFacet.json#/$defs/TagsJobFacet",
+          "tags": [
+              {
+                  "key": "ibm_source",
+                  "value": "AGENTIC_CUSTOM_LINEAGE",
+                  "source": "CONFIG"
+              }
+          ]
       }
     }
   },

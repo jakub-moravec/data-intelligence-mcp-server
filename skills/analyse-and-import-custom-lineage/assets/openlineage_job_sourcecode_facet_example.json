@@ -1,6 +1,6 @@
 {
   "sourceCode": {
-      "_producer": "https://some.producer.com/version/1.0",
+      "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
       "_schemaURL": "https://github.com/OpenLineage/OpenLineage/blob/main/spec/facets/SourceCodeJobFacet.json",
       "language": "<language>",
       "sourceCode": "<source-code>",

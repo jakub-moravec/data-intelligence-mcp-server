@@ -1,6 +1,6 @@
 {
   "documentation": {
-      "_producer": "https://some.producer.com/version/1.0",
+      "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
       "_schemaURL": "https://github.com/OpenLineage/OpenLineage/blob/main/spec/facets/DocumentationJobFacet.json",
       "description": "<1-2 sentences describing the job's purpose> <AI disclaimer and source information>",
       "contentType": "text/markdown"

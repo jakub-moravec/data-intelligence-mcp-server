@@ -12,13 +12,13 @@
         "jobType": "<job type - what does this OpenLineage Job represent?>"
       },
       "documentation": {
-        "_producer": "https://some.producer.com/version/1.0",
+        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
         "_schemaURL": "https://github.com/OpenLineage/OpenLineage/blob/main/spec/facets/DocumentationJobFacet.json",
         "description": "<1-2 sentences describing the job's purpose> <AI disclaimer and source information>",
         "contentType": "text/markdown"
       },
       "sourceCode": {
-        "_producer": "https://some.producer.com/version/1.0",
+        "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
         "_schemaURL": "https://github.com/OpenLineage/OpenLineage/blob/main/spec/facets/SourceCodeJobFacet.json",
         "language": "<language>",
         "sourceCode": "<source-code>",
@@ -27,7 +27,7 @@
         "sourceCodeFileLineEnd": "<source-code-file-line-end>"
       },
       "tags": {
-          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.38.0/integration/spark",
+          "_producer": "https://github.com/IBM/data-intelligence-mcp-server",
           "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/TagsJobFacet.json#/$defs/TagsJobFacet",
           "tags": [
               {

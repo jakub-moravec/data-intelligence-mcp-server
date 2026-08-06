@@ -1,11 +1,70 @@
 # Copyright [2025] [IBM]
 # Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
 # See the LICENSE file in the project root for license information.
+
 from pydantic import BaseModel
 from pydantic import Field
-from app.shared.models import BaseResponseModel, field_validator
+from app.shared.models import BaseResponseModel, field_validator, model_validator
 from enum import Enum
 from typing import Any, List, Literal, Optional, Union
+
+
+class ReimportOptions(BaseModel):
+    """Optional overrides for re-import behaviour. Only supply the keys you want to change;
+    unspecified fields retain their default values."""
+    update_name: Optional[bool] = Field(
+        True,
+        description="Whether to update the asset name during re-import. Defaults to True."
+    )
+    update_description: Optional[bool] = Field(
+        True,
+        description="Whether to update the asset description during re-import. Defaults to True."
+    )
+    update_column_descriptions: Optional[bool] = Field(
+        True,
+        description="Whether to update column descriptions during re-import. Defaults to True."
+    )
+    delete_when_deleted_at_source: Optional[bool] = Field(
+        True,
+        description="Whether to delete the asset when it is deleted at the source. Defaults to True."
+    )
+    delete_when_removed_from_scope: Optional[bool] = Field(
+        False,
+        description="Whether to delete the asset when it is removed from the import scope. Defaults to False."
+    )
+
+
+class ImportOptions(BaseModel):
+    """Optional overrides for import options. Only supply the keys you want to change;
+    unspecified fields retain their default values."""
+    exclude_tables: Optional[bool] = Field(
+        False,
+        description="Whether to exclude tables from the import. Defaults to False."
+    )
+    exclude_views: Optional[bool] = Field(
+        False,
+        description="Whether to exclude views from the import. Defaults to False."
+    )
+    import_incremental_changes_only: Optional[bool] = Field(
+        False,
+        description="Whether to import only incremental changes since the last import. Defaults to False."
+    )
+    include_foreign_key: Optional[bool] = Field(
+        False,
+        description="Whether to include foreign key relationships in the import. Defaults to False."
+    )
+    include_primary_key: Optional[bool] = Field(
+        False,
+        description="Whether to include primary key information in the import. Defaults to False."
+    )
+    include_asset_lifecycle_timestamps: Optional[bool] = Field(
+        False,
+        description="Whether to include asset lifecycle timestamps in the import. Defaults to False."
+    )
+    metadata_from_catalog_table_only: Optional[bool] = Field(
+        False,
+        description="Whether to import metadata from catalog tables only. Defaults to False."
+    )
 
 
 class CreateMetadataImportRequest(BaseModel):
@@ -21,6 +80,26 @@ class CreateMetadataImportRequest(BaseModel):
         ]
     )
     name: Optional[str] = Field(None, description="Optional custom name for the metadata import. If not provided, a name will be auto-generated.")
+    catalog_name: Optional[str] = Field(
+        None,
+        description="Optional catalog name. If provided, imported metadata will be stored in this catalog instead of the project."
+    )
+    tags: Optional[List[str]] = Field(
+        None,
+        description="Optional list of tags to associate with the metadata import asset. If not provided, no tags are added."
+    )
+    migrate_tags: Optional[bool] = Field(
+        False,
+        description="Whether to migrate tags from the metadata import asset to the imported data assets. Defaults to False."
+    )
+    reimport_options: Optional[ReimportOptions] = Field(
+        None,
+        description="Optional overrides for re-import behaviour. Only supply the keys you want to change; all other keys retain their defaults."
+    )
+    import_options: Optional[ImportOptions] = Field(
+        None,
+        description="Optional overrides for import options. Only supply the keys you want to change; all other keys retain their defaults."
+    )
 
 class CreateMetadataImportResponse(BaseResponseModel):
     message: str = Field(..., description="An example output message from create_metadata_import.")
@@ -118,13 +197,31 @@ class MetadataImportRequest(BaseModel):
             raise ValueError("target_catalog_id cannot be an empty string. Use null instead.")
         return v
     
-    target_project_id: str = Field(..., description="The ID of the project where the metadata import asset will be created. This project must be in the same location as the connection.")
+    target_project_id: Optional[str] = Field(
+        None,
+        description=(
+            "The ID of the project where the metadata import asset will be created. "
+            "This project must be in the same location as the connection. "
+        )
+    )
     
     @field_validator("target_project_id")
     def validate_project_id(cls, v):
         if v == "":
-            raise ValueError("target_project_id cannot be an empty string or null. Use project_id instead")
+            raise ValueError("target_project_id cannot be an empty string")
         return v
+
+    @model_validator(mode='after')
+    def validate_target(self):
+        if self.target_project_id and self.target_catalog_id:
+            raise ValueError(
+                "target_project_id and target_catalog_id are mutually exclusive. Provide exactly one."
+            )
+        if not self.target_project_id and not self.target_catalog_id:
+            raise ValueError(
+                "Exactly one of target_project_id or target_catalog_id must be provided."
+            )
+        return self
     
     tags: List[str] = Field(default_factory=list, description="A list of tags to be associated with the metadata import asset.")
     
@@ -145,12 +242,12 @@ class MetadataImportRequest(BaseModel):
     
     import_options: dict[str, bool] = Field(default_factory=lambda: {
         "exclude_tables": False,
-        "exclude_views": True,
-        "import_incremental_changes_only": True,
-        "include_foreign_key": True,
-        "include_primary_key": True,
-        "include_asset_lifecycle_timestamps": True,
-        "metadata_from_catalog_table_only": True
+        "exclude_views": False,
+        "import_incremental_changes_only": False,
+        "include_foreign_key": False,
+        "include_primary_key": False,
+        "include_asset_lifecycle_timestamps": False,
+        "metadata_from_catalog_table_only": False
     }, description="Advanced options that control how the asset metadata import is performed. This input is needed only if import_type is 'metadata'.")
 
 
@@ -169,12 +266,12 @@ class AssetMetadataImportRequest(MetadataImportRequest):
     scope: MetadataImportScope = Field(..., description="The scope that defines what asset metadata needs to be imported. This input is needed only if import_type is 'metadata'.")
     import_options: dict[str, bool] = Field(default_factory=lambda: {
         "exclude_tables": False,
-        "exclude_views": True,
-        "import_incremental_changes_only": True,
-        "include_foreign_key": True,
-        "include_primary_key": True,
-        "include_asset_lifecycle_timestamps": True,
-        "metadata_from_catalog_table_only": True
+        "exclude_views": False,
+        "import_incremental_changes_only": False,
+        "include_foreign_key": False,
+        "include_primary_key": False,
+        "include_asset_lifecycle_timestamps": False,
+        "metadata_from_catalog_table_only": False
     }, description="Advanced options that control how the asset metadata import is performed. This input is needed only if import_type is 'metadata'.",
                                             examples=dict(exclude_tables=False, exclude_views=False, import_incremental_changes_only=False, include_foreign_key=False, include_primary_key=False))
 
@@ -219,7 +316,8 @@ class MetadataImportEntity(BaseModel):
     name: str
     import_type: ImportType
     connection_id: str
-    target_project_id: str
+    target_project_id: Optional[str] = None
+    target_catalog_id: Optional[str] = None
     job_id: str
     scope: MetadataImportScope
     datasource_type: str

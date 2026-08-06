@@ -5,8 +5,8 @@
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
+
 from app.shared.models import BaseResponseModel
 
 PROJECT_NAME_DESC = "The name of the project."
@@ -660,19 +660,35 @@ ENRICHMENT_OBJECTIVES_MAP = {
 class TermGenerationRequest(BaseModel):
     """
     Request model for running term generation on metadata enrichment assets.
+    
+    Supports both legacy and v3 MDE APIs:
+    - Legacy: Only project_name and metadata_enrichment_name required
+    - V3: Additional job_name and category_name for multi-job MDEs
     """
     project_name: str = Field(
         ..., description=PROJECT_NAME_DESC
     )
     metadata_enrichment_name: Optional[str] = Field(
-        None, 
+        None,
         description="The name of the metadata enrichment asset to run on."
+    )
+    job_name: Optional[str] = Field(
+        None,
+        description="(V3 only) The name of the job within the MDE to run term generation on. If not provided, user will be prompted to select from available jobs."
+    )
+    category_name: Optional[str] = Field(
+        None,
+        description="(V3 only) The name of the target category for generated terms. If not provided, uses the job's configured target category or prompts user to select."
     )
 
 
 class AssetProcessingResult(BaseModel):
     """Result for a single asset in batch processing."""
     asset_id: str = Field(description="The unique identifier of the asset.")
+    error_message: Optional[str] = Field(
+        None,
+        description="Error message from the API when processing failed, if available."
+    )
 
 
 class TermGenerationBatchResponse(BaseResponseModel):
@@ -699,6 +715,10 @@ class TermGenerationResult(BaseResponseModel):
     )
     task_inbox: str = Field(
         ..., description="The URL to the task inbox in the UI."
+    )
+    target_category_url: Optional[str] = Field(
+        None,
+        description="(V3 only) The URL to the target category where terms were generated."
     )
     failures: Optional[list[AssetProcessingResult]] = Field(
         None,
@@ -734,10 +754,7 @@ class MetadataEnrichmentDetails(BaseModel):
         ...,
         description="Enrichment assets information including asset IDs and count"
     )
-    target_category_id: str = Field(..., description="Target category ID for term generation")
-    governance_scope: list = Field(..., description="List of governance scope categories")
     mde_url: str = Field(..., description="URL to the metadata enrichment asset in the UI")
-    target_category_url: str = Field(..., description="URL to the target category in the UI")
 
 
 class MetadataEnrichmentResult(BaseResponseModel):
@@ -750,6 +767,56 @@ class MetadataEnrichmentResult(BaseResponseModel):
         ..., description="Message prompting user to specify which metadata enrichment to use."
     )
     failures: Optional[list[str]] = Field(default=None, description="List of metadata enrichment asset IDs that failed to process")
+
+
+class JobOption(BaseModel):
+    """Model representing a job option for term generation."""
+    job_id: str = Field(..., description="Job ID")
+    job_name: str = Field(..., description="Job name")
+    target_category_id: str = Field(..., description="Target category ID")
+    target_category_name: str = Field(..., description="Target category name")
+
+
+class TermGenerationJobSelectionResult(BaseModel):
+    """Result model when user needs to select a job for v3 term generation."""
+    message: str = Field(
+        ..., description="Message prompting user to select a job or provide category"
+    )
+    available_jobs: list[JobOption] = Field(
+        ..., description="List of available jobs with target categories"
+    )
+    mde_name: str = Field(..., description="Name of the MDE")
+    project_name: str = Field(..., description="Name of the project")
+
+class CategoryOption(BaseModel):
+    """Model representing a category option when duplicates exist."""
+    category_id: str = Field(..., description="Category UUID")
+    category_name: str = Field(..., description="Category name")
+    parent_path: str = Field(
+        ..., 
+        description="Full parent hierarchy path (e.g., 'Finance >> Risk Management >> subcat_3')"
+    )
+
+
+class CategorySelectionResult(BaseModel):
+    """Result model when user needs to select from duplicate category names.
+    
+    User selects a category and re-runs the tool with the selected category UUID.
+    """
+    message: str = Field(..., description="Prompt message for user")
+    available_categories: list[CategoryOption] = Field(
+        default_factory=list,
+        description="List of categories with parent hierarchy (empty if >5 duplicates)"
+    )
+    request_uuid: bool = Field(
+        False, 
+        description="True if >5 duplicates - user should provide UUID instead"
+    )
+    category_name: str = Field(..., description="The ambiguous category name")
+    duplicate_count: int = Field(..., description="Total number of duplicate categories found")
+    mde_name: str = Field(..., description="MDE name")
+    project_name: str = Field(..., description="Project name")
+
 
 
 class MetadataImportResponse(BaseResponseModel):

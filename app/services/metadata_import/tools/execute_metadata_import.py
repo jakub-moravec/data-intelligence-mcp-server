@@ -110,6 +110,7 @@ async def execute_metadata_import_job(
         response = await tool_helper_service.execute_post_request(
             url=post_url,
             params=query_params,
+            json={"job_run": {}},
             tool_name="execute_metadata_import",
         )
         

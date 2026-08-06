@@ -14,6 +14,7 @@ from app.services.search.models.search_asset import (
     SearchAssetResponse,
 )
 from app.services.text_to_query_search.utils.entity_resolver import find_container_id
+from app.services.text_to_query_search.utils.query_generator import inject_must_not_exclusions
 from app.shared.utils.helpers import is_none, append_context_to_url
 from app.shared.logging import LOGGER, auto_context
 from app.shared.utils.tool_helper_service import tool_helper_service
@@ -21,19 +22,31 @@ from app.shared.exceptions.base import ServiceError
 from app.shared.ui_message.ui_message_context import ui_message_context
 from app.shared.utils.utils_tools import format_search_results_for_table
 
-def _add_ui_message_if_results(results: List[SearchAssetResponse]) -> None:
+def _add_ui_message_if_results(results: List[SearchAssetResponse], show_table_selection: bool = False) ->List[SearchAssetResponse]:
     """Add UI message if search results exist."""
     if results:
         formatted_results = format_search_results_for_table(results)
+
+        if show_table_selection:
+            selected_assets = ui_message_context.send_table_selector_msg(
+                tool_name="search_asset",
+                data=results,
+                formatted_data=formatted_results,
+                title="Assets",
+                description="Please select the asset(s) you'd like to use.",
+                unique_keys=["Name"],
+            )
+            return selected_assets or []
         ui_message_context.add_table_ui_message(
             tool_name="search_asset",
             formatted_data=formatted_results,
             title="Search Results"
         )
 
+    return results
 
 async def _search_asset(
-    request: SearchAssetRequest, ctx=None
+    request: SearchAssetRequest, show_table_selection: bool = False
 ) -> List[SearchAssetResponse]:
     # Validate search_prompt is not empty
     if not request.search_prompt or request.search_prompt.strip() == "":
@@ -102,11 +115,12 @@ async def _search_asset(
     payload = {
         "query": {
             "bool": {
-                "must": must_clauses
+                "must": must_clauses,
             }
         },
         "_source": ["metadata", "entity.assets", "artifact_id"]
     }
+    inject_must_not_exclusions(payload)
 
     params = {"auth_scope": auth_scope, "auth_cache": True, "tenant_scope": True}
 
@@ -119,9 +133,7 @@ async def _search_asset(
     search_response = response.get("rows", [])
     results = list(map(_construct_search_asset, search_response)) if search_response else []
 
-    _add_ui_message_if_results(results)
-
-    return results
+    return _add_ui_message_if_results(results, show_table_selection)
 
 
 @service_registry.tool(
@@ -145,7 +157,8 @@ async def _search_asset(
 async def search_asset(
     search_prompt: Annotated[str, Field(description="The search prompt from the user about data assets potentially with additional searching details")],
     container_type: Annotated[str, Field(description="The container type in which to search assets, defaults to catalog")] = "catalog",
-    container_name: Annotated[str | None, Field(description="Optional container name to resolve to ID and filter results")] = None
+    container_name: Annotated[str | None, Field(description="Optional container name to resolve to ID and filter results")] = None,
+    show_table_selection: Annotated[bool, Field(description="If True, shows a selection table UI and returns selected assets. If False, shows display-only table UI and returns search results.")] = False,
 ) -> List[SearchAssetResponse]:
     """Wrapper that expands SearchAssetRequest object into individual parameters."""
     
@@ -156,7 +169,7 @@ async def search_asset(
     )
 
     # Call the original search_asset function
-    return await _search_asset(request)
+    return await _search_asset(request, show_table_selection=show_table_selection)
 
 
 def _construct_search_asset(row: Any):

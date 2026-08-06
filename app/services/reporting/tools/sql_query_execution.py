@@ -4,7 +4,7 @@
 
 import sqlglot
 from sqlglot import errors
-from sqlglot.expressions import Select, With
+from sqlglot.expressions import Delete, Insert, Select, Update, With
 from typing import Annotated
 from pydantic import Field
 
@@ -16,7 +16,7 @@ from app.services.reporting.models.sql_query_execution import (
     SqlQueryExecutionResponse,
     SqlResult,
 )
-from app.shared.exceptions.base import ExternalAPIError, ServiceError
+from app.shared.exceptions.base import ServiceError
 from app.shared.logging.generate_context import auto_context
 from app.shared.logging.utils import LOGGER
 from app.shared.utils.tool_helper_service import tool_helper_service
@@ -34,6 +34,8 @@ def _validate_sql_query(sql_query: str) -> str:
         - The query must not exceed 100,000 characters.
         - The query must not contain semicolons (to prevent multiple statements).
         - The query must start with "SELECT" or "WITH" (case-insensitive).
+        - No data-modifying operations (INSERT/UPDATE/DELETE) are allowed anywhere
+          in the statement, including inside CTE (WITH ... AS (...)) bodies.
 
     Returns:
         str: The trimmed SQL query if valid.
@@ -71,6 +73,20 @@ def _validate_sql_query(sql_query: str) -> str:
         raise ServiceError(
             "INVALID_QUERY: Only SELECT or WITH queries are supported."
         )
+
+    # Recursively inspect the full AST to block data-modifying CTEs.
+    # A WITH ... AS (DELETE/UPDATE/INSERT ... RETURNING ...) SELECT ... construct
+    # has a Select root node and passes the isinstance check above, but contains
+    # DML nodes deeper in the tree. We must reject those here.
+    for dml_node in root_expr.find_all(Insert, Update, Delete):
+        LOGGER.info(
+            f"INVALID_QUERY: Data-modifying operation detected inside query: {type(dml_node).__name__}"
+        )
+        raise ServiceError(
+            "INVALID_QUERY: Data-modifying operations (INSERT, UPDATE, DELETE) are not allowed, "
+            "including inside CTE definitions."
+        )
+
     return trimmed
 
 
@@ -135,18 +151,10 @@ async def _sql_query_execution(
         f"{tool_helper_service.base_url}{REPORTING_BASE_ENDPOINT}/{tenant_id}/ikcquery/executesql"
     )
 
-    try:
-        # Execute the SQL query
-        response = await tool_helper_service.execute_post_request(
-            url=execute_sql_url, json=payload
-        )
-    except Exception as e:
-        LOGGER.error(f"Failed to execute SQL query: {e}")
-        raise ExternalAPIError(
-            f"Failed to execute SQL query: {str(e)}",
-            service="reporting",
-            tool="sql_query_execution",
-        )
+    # Execute the SQL query — let auth/API errors propagate as-is (same as all other tools)
+    response = await tool_helper_service.execute_post_request(
+        url=execute_sql_url, json=payload
+    )
 
     # Validate response structure
     if (

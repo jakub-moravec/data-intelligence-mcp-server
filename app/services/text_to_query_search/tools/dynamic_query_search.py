@@ -2,7 +2,6 @@
 # Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
 # See the LICENSE file in the project root for license information.
 
-import json
 import asyncio
 from typing import Any, List, Optional, Annotated
 from pydantic import Field
@@ -10,9 +9,8 @@ from pydantic import Field
 from aiocache import cached
 
 from app.core.registry import service_registry
-from app.services.constants import GS_BASE_ENDPOINT, TEXT_TO_QUERY_BASE_ENDPOINT, PROJECTS_BASE_ENDPOINT, CATALOGS_BASE_ENDPOINT
+from app.services.constants import PROJECTS_BASE_ENDPOINT, CATALOGS_BASE_ENDPOINT
 from app.services.glossary.constants import ContainerType
-from app.services.search.models.search_asset import SearchAssetRequest
 from app.services.search.tools.search_asset import search_asset
 from app.services.text_to_query_search.constants import (
     MAX_SEARCH_RESULTS,
@@ -36,6 +34,10 @@ from app.services.text_to_query_search.utils.url_builder import (
 from app.services.text_to_query_search.utils.source_data_extractor import (
     extract_source_data,
 )
+from app.services.text_to_query_search.utils.query_generator import (
+    generate_gs_query,
+    fetch_search_page,
+)
 from app.services.text_to_query_search.utils.request_validator import (
     validate_request,
 )
@@ -45,10 +47,6 @@ from app.shared.utils.tool_helper_service import tool_helper_service
 from app.shared.exceptions.base import ExternalAPIError, ServiceError
 from app.shared.ui_message.ui_message_context import ui_message_context
 from app.shared.utils.utils_tools import format_search_results_for_table
-
-# Maximum number of retry attempts for query generation
-MAX_QUERY_GENERATION_ATTEMPTS = 2
-
 
 def _create_response_with_ui(
     results: List[GlobalSearchAssetResponse],
@@ -130,16 +128,16 @@ async def _search(
     )
 
     try:
-        query_data, validation_response = await _call_text_to_query_api_with_retry(
+        query_data, validation_response = await generate_gs_query(
             request.search_prompt, request.artifact_types, container_details, resolved_names_mapping
         )
         LOGGER.info("Generated query from text2query: '%s'", query_data)
     except ExternalAPIError as e:
         LOGGER.error("External API failure calling text-to-query API: %s", e)
-        return await _fallback_response(request)
+        return await _fallback_response(request, show_table_selection=show_table_selection)
     except Exception as e:
         LOGGER.error("Error calling text-to-query API: %s", e)
-        return await _fallback_response(request)
+        return await _fallback_response(request, show_table_selection=show_table_selection)
 
     try:
         response = await _execute_search_with_query(query_data, validation_response)
@@ -153,17 +151,17 @@ async def _search(
                 language="json"
             )
             return _create_response_with_ui(results, query_data, response, show_table_selection)
-        return await _fallback_response(request, query_data)
+        return await _fallback_response(request, query_data, show_table_selection=show_table_selection)
     except ExternalAPIError as e:
         LOGGER.error("External API failure executing search with generated query: %s", e)
-        return await _fallback_response(request, query_data)
+        return await _fallback_response(request, query_data, show_table_selection=show_table_selection)
     except Exception as e:
         # Check for GraphInterrupt by name to avoid dependency on langgraph
         # Re‑raise GraphInterrupt so the agent pauses for user asset selection
-        if type(e).__name__ == "GraphInterrupt": 
+        if type(e).__name__ == "GraphInterrupt":
             raise
         LOGGER.error("Error executing search with generated query: %s", e)
-        return await _fallback_response(request, query_data)
+        return await _fallback_response(request, query_data, show_table_selection=show_table_selection)
 
 
 def _construct_search_asset(row: Any, source_fields: Optional[List[str]] = None):
@@ -180,7 +178,7 @@ def _construct_search_asset(row: Any, source_fields: Optional[List[str]] = None)
     artifact_type = (
         "glossary_term" if artifact_type == "business_term" else artifact_type
     )
-    if artifact_type not in ["category", "glossary_term", "reference_data", "classification", "data_class"]:
+    if artifact_type not in ["category", "glossary_term", "reference_data", "classification", "data_class", "policy", "rule"]:
         entity = row.get("entity", {})
         assets = entity.get("assets", {})
         catalog_id = assets.get("catalog_id", None)
@@ -210,169 +208,26 @@ def _construct_search_asset(row: Any, source_fields: Optional[List[str]] = None)
         source_data=source_data,
     )
 
-async def _call_text_to_query_api(
-    search_prompt: str,
-    artifact_types: List[str] | None,
-    container_details: Container | None,
-    resolved_names_mapping: List[dict] | None = None,
-) -> dict:
-    """Call text-to-query API and return query data."""
-    instructions = [
-        "When asked to search for assets by name, Look for assets that match filter metadata.name. Try to match against singular and plural forms of the name. E.g If the user asks about policies, search for assets with name matching policy or policies",
-        "When asked to search for assets related to a keyword, search in: name, semantic name, description, and tags. Include keyword variations ONLY when word forms differ significantly (e.g., 'policy' → 'policies'). Examples: 'policy' → search for 'policy' AND 'policies'; 'analysis' → search for 'analysis' AND 'analyses'; 'investment' → search for 'investment' AND 'investing'. Do NOT add variations when wildcard would suffice. Do NOT use synonyms or unrelated meanings. Apply this to generic questions like 'find assets about X', 'get data related to X'",
-        "Only if there is specific named container mentioned in the search prompt apply container id (project_id/catalog_id) filter. E.g find assets related to schools in projects. -> There is no specific project mentioned; Do not apply container filter. E.g find assets related to schools in project 'schools' -> Apply project ID filter",
-        "If the user asks about glossary terms, use metadata.artifact_type=glossary_term",
-        "When searching for tags, filter by metadata.tags",
-        "When asked about abbreviations try to match by name or by entity.artifacts.abbreviation"
-    ]
-    if artifact_types:
-        instructions.append(
-            f"Apply filter to match searched data type ->  metadata.artifact_type: {', '.join(artifact_types)}"
-        )
-    names_to_ids = []
-    if (
-        container_details
-        and container_details.id
-        and container_details.type
-        and container_details.name
-    ):
-        names_to_ids.append(
-            {
-                "name": container_details.name,
-                "type": str(container_details.type),
-                "id": container_details.id,
-            }
-        )
-    
-    # Add resolved names_mapping to names_to_ids
-    if resolved_names_mapping:
-        names_to_ids.extend(resolved_names_mapping)
-        LOGGER.info("Added %d resolved entities to names_to_ids", len(resolved_names_mapping))
-    
-    text_to_query_payload = {
-        "include_raw_model_input_output": False,
-        "input_question": search_prompt,
-        "parameters": {
-            "type": "elastic_query",
-            "names_to_ids": names_to_ids,
-            "instructions": instructions,
-        },
-    }
-
-    response = await tool_helper_service.execute_post_request(
-        url=str(tool_helper_service.base_url) + TEXT_TO_QUERY_BASE_ENDPOINT,
-        json=text_to_query_payload,
-    )
-
-    query_data = response.get("results", {})[0].get("generated_query", {})
-
-    query_data = _parse_and_enrich_query_data(query_data)
-    
-    # Ensure query has sort parameter
-    if "sort" not in query_data:
-        query_data["sort"] = [{"metadata.created_on": "desc"}]
-    
-    return query_data
-
-
-async def _call_text_to_query_api_with_retry(
-    search_prompt: str,
-    artifact_types: List[str] | None,
-    container_details: Container | None,
-    resolved_names_mapping: List[dict] | None = None,
-    max_attempts: int = MAX_QUERY_GENERATION_ATTEMPTS,
-) -> tuple[dict, dict | None]:
-    """Call text-to-query API with retry logic and query validation.
-    
-    Args:
-        search_prompt: The user's search prompt
-        artifact_types: List of artifact types to filter by
-        container_details: Container information if specified
-        resolved_names_mapping: List of resolved entity mappings with IDs
-        max_attempts: Maximum number of retry attempts
-        
-    Returns:
-        tuple: (query_data, validation_response) where validation_response contains
-               the results from the validation call that can be reused
-        
-    Raises:
-        Exception: If all retry attempts fail
-    """
-    last_exception = None
-    
-    for attempt in range(max_attempts):
-        try:
-            LOGGER.info("Query generation attempt %d of %d", attempt + 1, max_attempts)
-            query_data = await _call_text_to_query_api(
-                search_prompt, artifact_types, container_details, resolved_names_mapping
-            )
-            
-            # Validate query by executing with the default size to ensure:
-            # 1. Query syntax is accepted by the external search API
-            # 2. Query returns results (empty results trigger retry)
-            # 3. API authentication and connectivity work
-            # Validation results will be re-used if present
-            user_requested_limit = query_data.get("size", MAX_SEARCH_RESULTS)
-            validation_size = min(MAX_SEARCH_RESULTS, user_requested_limit)
-            test_query = {**query_data, "size": validation_size}
-            validation_response: dict[Any, Any] = await _fetch_search_page(query=test_query)
-            
-            LOGGER.info("Query validated successfully on attempt %d with size %d", attempt + 1, validation_size)
-            return query_data, validation_response
-            
-        except (ExternalAPIError, ConnectionError, TimeoutError) as e:
-            last_exception = e
-            LOGGER.warning(
-                "Query generation attempt %d failed: %s",
-                attempt + 1,
-                str(e)
-            )
-            if attempt == max_attempts - 1:
-                LOGGER.error(
-                    "All %d query generation attempts failed. Last error: %s",
-                    max_attempts,
-                    str(e)
-                )
-                raise
-    
-    # Should not reach here
-    raise last_exception if last_exception else ServiceError("Query generation failed")
-
-
-def _parse_and_enrich_query_data(query_data: dict | str) -> dict:
-    """Parse query data from string if needed and ensure required _source fields are present."""
-    if not isinstance(query_data, str):
-        return query_data
-    parsed: dict = json.loads(query_data)
-    LOGGER.info("Parsed query string to object")
-    if parsed.get("_source"):
-        source = parsed["_source"]
-        if isinstance(source, list):
-            for required_field in ("metadata", "entity.assets", "artifact_id"):
-                if required_field not in source:
-                    source.append(required_field)
-    return parsed
-
-
 async def _fallback_response(
     request: TextToQuerySearchAssetRequest,
     query: dict | None = None,
+    show_table_selection: bool = False,
 ) -> TextToQuerySearchAssetResponse:
     """Return a fallback response using the basic search_asset function."""
     response = await search_asset(search_prompt=request.search_prompt,
         container_type=request.container_type or "catalog",
-        container_name=request.container_name)
-    return TextToQuerySearchAssetResponse(
-        generated_query=query or {}, response=response, message=None
+        container_name=request.container_name,
+        show_table_selection=show_table_selection,
     )
 
-
-async def _fetch_search_page(query: dict) -> dict:
-    """Execute a single search page request against the global search endpoint."""
-    return await tool_helper_service.execute_post_request(
-        url=str(tool_helper_service.base_url) + GS_BASE_ENDPOINT,
-        json=query,
-        params={"auth_cache": True, "tenant_scope": True}
+    if not response and show_table_selection:
+        message = "No assets were selected."
+    else:
+        message = None
+    return TextToQuerySearchAssetResponse(
+        generated_query=query or {},
+        response=response or [],
+        message=message,
     )
 
 
@@ -411,7 +266,7 @@ async def _execute_search_with_query(query_data: dict, validation_response: dict
         LOGGER.info("Reusing validation response, skipping initial search call")
         response = validation_response
     else:
-        response = await _fetch_search_page(query=query_data)
+        response = await fetch_search_page(query=query_data)
     
     total_count = response.get("size", 0)
     all_rows = response.get("rows", [])
@@ -442,7 +297,7 @@ async def _execute_search_with_query(query_data: dict, validation_response: dict
         )
 
         paginated_rows = (
-            await _fetch_search_page(
+            await fetch_search_page(
                 {**query_data, "from": current_from, "size": next_page_size}
             )
         ).get("rows", [])

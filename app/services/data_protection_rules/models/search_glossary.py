@@ -9,8 +9,8 @@ from typing import Literal, List
 
 
 class SearchGovernanceArtifactRequest(BaseModel):
-    rhs_type: Literal["classification", "data_class", "glossary_term"] = Field(
-        description="Governance artifacts type name. Must be one of: 'classification', 'data_class', or 'glossary_term'(another name is business term)."
+    rhs_type: Literal["classification", "data_class", "glossary_term", "policy", "rule", "reference_data"] = Field(
+        description="Governance artifacts type name. Must be one of: 'classification', 'data_class', 'glossary_term'(another name is business term), 'policy', 'rule', or 'reference_data'."
     )
     query_value: str = Field(
         description="Search query string. Cannot be empty."

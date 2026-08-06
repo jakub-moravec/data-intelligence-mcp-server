@@ -20,6 +20,8 @@
          not yet published.
       5. **perform_workflow_task_action** → performs actions on workflow tasks. Use action="claim" to assign a task to yourself, action="complete" to finish a task, 
          or action="unclaim" to release a previously claimed task. For claim and complete actions, required form properties will be collected through elicitation.
+      6. **get_artifact_details** → Get detailed information about a specific workflow glossary artifact (business term or data class). Use when reviewing draft artifact details before approval, comparing changes between the latest and previous draft versions, or viewing relationships, stewards, and descriptions.
+      7. **list_draft_artifacts** → List draft workflow glossary artifacts (business terms and/or data classes). Use when you need an overview of artifacts currently in workflow or need to find which artifacts are pending approval.
       NEVER call **get_my_workflow_inbox_tasks** for data classes and business terms.
       ALWAYS use **list_data_classes_by_search_term** or **list_business_terms_by_search_term** before calling **list_user_tasks_approval_data_for_artifact**. 
       NEVER use **list_user_tasks_approval_data_for_artifact** without an artifact_id or to retrieve the user's task inbox.

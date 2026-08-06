@@ -2,6 +2,32 @@
 
 > All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project **adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)**.
 
+## [1.4.0] - Aug 6th, 2026
+
+### Added
+- **Workflow**:
+  - `get_artifact_details` - Retrieves detailed information about draft glossary terms or data classes, including version comparison between latest and previous drafts with descriptions, relationships, and data steward names
+  - `list_draft_artifacts` - Lists all draft business terms and data classes with artifact IDs, version IDs, workflow states, and UI URLs
+- **Data Protection Rules (DPS)**:
+  - `get_policy_metrics` - New tool to retrieve and aggregate DPS policy enforcement metrics for a specified time period. Supports querying enforcements, denials, operational policies, and operational rules, aggregated by days, months, years, policies, rules, users, outcomes, governance type, PEP host types, cache status, context operations/locations, and asset types/locations. Accepts optional filters for policy ID, rule ID, user, governance type, outcome, PEP host type, cache flag, context operation/location, asset type/location, and sort order.
+- **Search**:
+  - `execute_gs_query` - Execute a GS (Global Search) formatted Elasticsearch DSL query directly against the global search index. Supports standard ES DSL, GS full-text search with optional field restriction and NLQ analysis, and GS semantic/AI search. Also accepts a natural language query that is automatically converted to an ES DSL body by the text-to-query service when no explicit query is supplied. Results are capped at 10000 documents. Optional parameters allow fine-grained control over ACL filtering, index type selection, and tenant scoping. Returns hit count, typed rows, aggregations, and semantic search expansions.
+- **Metadata Import (MDI)**:
+  - `pause_resume_or_cancel_mdi_job_run` - Pause, resume, or cancel a metadata import job run. Automatically targets the latest eligible run for the requested action when no `job_run_id` is provided. Cancel is permanent and cannot be undone.
+  - `delete_metadata_import` - Permanently deletes a metadata import asset from a project. This action cannot be undone.
+  - `edit_metadata_import` - Edits an existing metadata import asset in a project; supports updating description, scope, tags, import_type, reimport_options, and import_options. When supplying reimport_options or import_options, all keys must be provided.
+  - `bulk_publish_assets` - Publishes multiple data assets in bulk from a metadata import operation to a target catalog.
+
+### Changed
+- **Metadata Import (MDI)**:
+  - `create_metadata_import` - Enhanced to accept an optional `catalog_name` parameter. When provided, metadata will be imported to the specified target catalog instead of the project. Also accepts optional `tags`, `migrate_tags`, `reimport_options`, and `import_options` parameters; unspecified option fields retain their defaults.
+
+### Fixed
+- **Data Protection Rules**:
+  - `search_governance_artifacts` - Extended support to all 6 governance artifact types. Previously only `classification`, `data_class`, and `glossary_term` were accepted; `policy`, `rule`, and `reference_data` are now supported.
+- **Text to Query Search**:
+  - `dynamic_query_search` - `policy` and `rule` artifact types are now treated as glossary-scope types (no container lookup, correct URL pattern), consistent with `classification`, `data_class`, `glossary_term`, and `reference_data`.
+
 ## [1.3.0] - Jul 17th, 2026
 
 ### Added

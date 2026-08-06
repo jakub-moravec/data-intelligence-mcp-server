@@ -1,8 +1,8 @@
 service:
   name: metadata_import
-  description: "Tools for creating and managing metadata imports (MDI)."
+  description: "Tools for creating, editing, and managing metadata imports (MDI)."
 system_instructions: |
-  This service helps create and manage metadata import (MDI) assets.
+  This service helps create, edit, and manage metadata import (MDI) assets.
   
   CRITICAL WORKFLOW - ALWAYS FOLLOW THIS ORDER:
   
@@ -19,18 +19,75 @@ system_instructions: |
      - You have obtained the list of available schemas from list_connection_paths, OR
      - User explicitly provided schema names in their request
      
-     This tool creates a draft metadata import in a project. Requires project name, connection name, and scope (list of schema/table paths).
+     This tool creates a draft metadata import in a project. Requires project name, connection name, and scope (list of schema/table paths). Optionally accepts tags, migrate_tags, reimport_options, and import_options — all default to their existing values if not provided.
   
-  3. **execute_metadata_import** - Call ONLY when:
-     - User has created the metadata import (via create_metadata_import), OR
-     - User explicitly mentions an existing metadata import name to execute, OR
-     - User requests to run, execute, or start a metadata import
+  3. **edit_metadata_import** - Call when:
+     - User wants to update an existing metadata import configuration
+     - User needs to change scope, options, or other settings
+     - User mentions "edit", "update", "modify", or "change" metadata import
      
-     This tool executes a pre-configured metadata import asset. It retrieves the asset's details, confirms its existence within the project,
-     and starts the import job. Returns information about the executed job including job ID, run ID, state, and a URL to monitor progress in the UI.
-     The metadata import asset must already exist in the project (either just created or pre-existing).
+     This tool patches an existing metadata import asset. All fields are optional - only provide fields that need to be updated.
+     Requires project name and metadata import name to identify the asset. Can update description, scope, tags, import_type, reimport_options, and import_options.
+     For reimport_options and import_options, all keys must be provided when the object is supplied.
      
-     If the provided metadata import name is not found, ask the user if they want to create a new metadata import using the create_metadata_import tool.
+     If the metadata import is not found, suggest using search_metadata_import to find existing imports.
+  
+  4. **delete_metadata_import** - Call when:
+     - User wants to permanently delete a metadata import asset
+     
+     This tool permanently deletes a metadata import asset from a project. This action cannot be undone.
+     Requires project name and metadata import name to identify the asset.
+     
+     WARNING: This is a destructive operation. Confirm with the user before proceeding.
+     If the metadata import is not found, suggest using search_metadata_import to find existing imports.
+  
+  5. **execute_metadata_import** - Call ONLY when:
+      - User has created the metadata import (via create_metadata_import), OR
+      - User explicitly mentions an existing metadata import name to execute, OR
+      - User requests to run, execute, or start a metadata import
+      
+      This tool executes a pre-configured metadata import asset. It retrieves the asset's details, confirms its existence within the project,
+      and starts the import job. Returns information about the executed job including job ID, run ID, state, and a URL to monitor progress in the UI.
+      The metadata import asset must already exist in the project (either just created or pre-existing).
+      
+      If the provided metadata import name is not found, ask the user if they want to create a new metadata import using the create_metadata_import tool.
+  
+  6. **pause_resume_or_cancel_mdi_job_run** - Call when:
+     - User wants to pause, resume, or cancel a metadata import job run
+     - User requests to temporarily stop (pause), continue (resume), or permanently stop (cancel) a job
+     - Use action='pause' when the user wants to temporarily pause a Running or Queued job
+     - Use action='resume' when the user wants to resume a Paused job
+     - Use action='cancel' when the user wants to permanently cancel a Running, Paused, or Queued job
+
+     This single tool handles all three job control operations via the 'action' parameter.
+     If no job_run_id is provided, it will automatically target the latest eligible job run:
+       - For pause: searches for the latest Running or Queued run.
+       - For resume: searches for the latest Paused run.
+       - For cancel: searches for the latest Running, Paused, or Queued run.
+     Pause: only Running or Queued jobs can be paused. Resume: only Paused jobs can be resumed.
+     Cancel: Running, Paused, or Queued jobs can be canceled — this cannot be undone.
+     Cannot operate on jobs that are already Completed, Failed, or Canceled.
+  
+  7. **bulk_publish_assets** - Call when:
+      - User wants to publish one or more assets from a metadata import to a catalog
+      - User mentions "publish", "bulk publish", or "promote assets to catalog"
+      
+      This tool publishes multiple data assets that have been imported via a metadata import to a catalog.
+      Requires project name, connection name, catalog name, metadata import name, and a list of asset names.
+      All parameters are required.
+      
+      ERROR HANDLING:
+      - If project not found: Use 'list_containers' to find available projects
+      - If connection not found: Use 'search_connection' to find available connections
+      - If catalog not found: Use 'list_containers' to find available catalogs
+      - If metadata import not found: Use 'search_metadata_import' to find existing imports
+      - If asset not found: Verify asset names exist in the project
+  
+  8. **search_metadata_import** - Call when:
+      - User wants to find existing metadata imports in a project
+      - You need to verify if a metadata import exists before editing, executing, or deleting
+      - User asks to list available metadata imports
   
   NEVER call create_metadata_import before list_connection_paths when schema discovery is needed.
-  ALWAYS confirm the final scope with the user before creating the import.
+  ALWAYS confirm the final scope with the user before creating or editing the import.
+  ALWAYS confirm with the user before deleting a metadata import, as this operation cannot be undone.

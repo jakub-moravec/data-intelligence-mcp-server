@@ -10,3 +10,4 @@ system_instructions: |
   3. list_containers(container_type?) → list all available containers (catalogs, projects, or spaces).
   4. find_container(container_id_or_name, container_type?) → find a specific container by ID or name.
   5. update_asset_metadata(asset_id_or_name, container_id_or_name, container_type, new_asset_name?, display_name?, description?, privacy?, format?, tags?, business_terms?, classifications?, related_items?) → update metadata and governance artifacts for a catalog or project asset including name, display name, description, privacy, format, tags, business terms, classifications, and related items.
+  6. execute_gs_query - execute a GS (Global Search) formatted query directly against the global search index.

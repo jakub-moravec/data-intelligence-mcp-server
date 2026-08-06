@@ -5,43 +5,48 @@
 import asyncio
 from functools import partial
 from string import Template
-from typing import Final, Optional, Dict, Any, Callable
+from typing import Any, Callable, Dict, Final, Optional
 
 from pydantic import TypeAdapter
 from tenacity import RetryError
 
-from app.core.settings import settings, ENV_MODE_SAAS
+from app.core.settings import ENV_MODE_SAAS, settings
 from app.services.constants import (
-    GS_BASE_ENDPOINT,
     ASSET_TYPE_BASE_ENDPOINT,
-    METADATA_ENRICHMENT_BASE_ENDPOINT,
     CAMS_ASSETS_BASE_ENDPOINT,
+    GS_BASE_ENDPOINT,
     JOBS_BASE_ENDPOINT,
+    METADATA_ENRICHMENT_BASE_ENDPOINT,
     WORKFLOW_BASE_ENDPOINT,
 )
 from app.services.metadata_enrichment.constants import CREATE_OR_UPDATE_METADATA_ENRICHMENT_ASSET_TOOL_NAME, \
     CREATE_OR_UPDATE_METADATA_ENRICHMENT_ASSET_JOBS_TOOL_NAME
 from app.services.metadata_enrichment.models.metadata_enrichment import (
-    ENRICHMENT_OBJECTIVES_MAP,
+    AssetProcessingResult,
+    ContainerAssets,
+    DataAssets,
     DataScopeAssetSelection,
     DataScopeOperation,
+    EnrichmentAssetsInfo,
     GovernanceScopeCategory,
+    JobRunStatus,
     MetadataEnrichmentAsset,
     MetadataEnrichmentAssetDataScopeUpdateRequest,
     MetadataEnrichmentAssetInfo,
     MetadataEnrichmentAssetPatch,
     MetadataEnrichmentAssetPatchResponse,
+    MetadataEnrichmentAssetResponse,
+    MetadataEnrichmentCreationRequest,
+    MetadataEnrichmentDetails,
     MetadataEnrichmentObjective,
     MetadataEnrichmentRun,
     OperationStatusEnum,
     QualityOrigins,
     SuggestedDataQualityCheck,
+    TermAssignmentObjective,
     TermGenerationBatchResponse,
-    AssetProcessingResult,
-    MetadataEnrichmentDetails,
-    EnrichmentAssetsInfo,
-    DataAssets, ContainerAssets, JobRunStatus, TermAssignmentObjective, MetadataEnrichmentCreationRequest,
-    MetadataEnrichmentAssetEnrichmentJob, MetadataEnrichmentAssetEnrichmentJobResponse,
+    MetadataEnrichmentAssetEnrichmentJob,
+    MetadataEnrichmentAssetEnrichmentJobResponse,
 )
 from app.services.tool_utils import (
     ARTIFACT_TYPE_DATA_ASSET,
@@ -51,7 +56,8 @@ from app.services.tool_utils import (
     find_asset_id_exact_match,
     find_category_id,
     find_metadata_enrichment_id,
-    find_project_id, find_metadata_import_id,
+    find_metadata_import_id,
+    find_project_id,
 )
 from app.shared.exceptions.base import ExternalAPIError, ServiceError, ValidationError
 from app.shared.logging.utils import LOGGER
@@ -1151,8 +1157,9 @@ def _check_early_termination(
 async def _run_term_generation_batch(
         batch_asset_ids: list[str],
         metadata_enrichment_asset_id: str,
-        query_params: Dict[str, Any]
-) -> tuple[list[str], list[str]]:
+        query_params: Dict[str, Any],
+        category_id: Optional[str] = None
+) -> tuple[list[str], list[AssetProcessingResult]]:
     """
     Process a single batch of assets for term generation.
     
@@ -1160,20 +1167,28 @@ async def _run_term_generation_batch(
         batch_asset_ids: List of asset IDs to process
         metadata_enrichment_asset_id: The MDE asset ID
         query_params: Query parameters for the API request
+        category_id: Optional category ID for V3 MDEs (required for V3, omit for legacy)
         
     Returns:
-        Tuple of (successful_asset_ids, failed_asset_ids)
+        Tuple of (successful_asset_ids, failed_asset_results)
+        - successful_asset_ids: list of asset ID strings
+        - failed_asset_results: list of AssetProcessingResult with asset_id and error_message
         
     Raises:
         ValueError: If the MDE is missing required configuration (term_generation_target_category_id)
     """
 
     # Generates terms for all assets/columns in the batch at the MDE level
-    payload = {
+    # Note: "columns" is intentionally omitted (not sent as null) — the API
+    # rejects a null value for that field with a 400 validation error.
+    payload: dict = {
         "data_asset_ids": batch_asset_ids,
-        "columns": None,
         "include_columns": True
     }
+
+    # Add category_id for V3 MDEs
+    if category_id:
+        payload["term_generation_target_category_id"] = category_id
 
     try:
         response = await tool_helper_service.execute_post_request(
@@ -1191,15 +1206,20 @@ async def _run_term_generation_batch(
         # Re-raise other exceptions
         raise
 
-    successes = []
-    failures = []
+    successes: list[str] = []
+    failures: list[AssetProcessingResult] = []
 
     for asset_id, asset_result in response.get("asset_results", {}).items():
         status = asset_result.get("status")
         if status and 200 <= status < 300:
             successes.append(asset_id)
         else:
-            failures.append(asset_id)
+            error_msg = asset_result.get("error_message") or None
+            LOGGER.warning(
+                "Term generation failed for asset %s with status %s: %s",
+                asset_id, status, error_msg
+            )
+            failures.append(AssetProcessingResult(asset_id=asset_id, error_message=error_msg))
 
     return successes, failures
 
@@ -1208,7 +1228,8 @@ async def _retry_failed_assets(
         failed_asset_ids: list[str],
         metadata_enrichment_asset_id: str,
         query_params: Dict[str, Any],
-        term_generation_responses: TermGenerationBatchResponse
+        term_generation_responses: TermGenerationBatchResponse,
+        category_id: str | None = None
 ) -> None:
     """
     Retry failed assets in batches and update the response object.
@@ -1218,6 +1239,7 @@ async def _retry_failed_assets(
         metadata_enrichment_asset_id: The MDE asset ID
         query_params: Query parameters for the API request
         term_generation_responses: Response object to update with retry results
+        category_id: Optional category ID for term generation (for legacy MDEs)
     """
     LOGGER.info(f"Starting retry phase for {len(failed_asset_ids)} failed assets")
 
@@ -1243,7 +1265,8 @@ async def _retry_failed_assets(
         retry_successes, retry_failures = await _run_term_generation_batch(
             batch_asset_ids=assets_to_retry,
             metadata_enrichment_asset_id=metadata_enrichment_asset_id,
-            query_params=query_params
+            query_params=query_params,
+            category_id=category_id  # Pass category_id from parameter
         )
 
         # Update tracking for retried assets
@@ -1255,9 +1278,13 @@ async def _retry_failed_assets(
                 f for f in term_generation_responses.failures if f.asset_id != asset_id
             ]
 
-        for asset_id in retry_failures:
-            retried_asset_ids.add(asset_id)
-            # Keep in failures list (already added in initial processing)
+        for failure in retry_failures:
+            retried_asset_ids.add(failure.asset_id)
+            # Update the existing failure entry with the latest error_message from retry
+            for existing in term_generation_responses.failures:
+                if existing.asset_id == failure.asset_id:
+                    existing.error_message = failure.error_message
+                    break
 
         LOGGER.info(f"Retry batch {retry_batch_number} completed: {len(retry_successes)} successes, {len(retry_failures)} final failures")
 
@@ -1268,31 +1295,32 @@ async def _retry_failed_assets(
         f"Retry phase completed. Final results: {len(term_generation_responses.successes)} total successes, {len(term_generation_responses.failures)} total failures")
 
 
-async def call_term_generation_on_metadata_enrichment_asset(
-        project_id: str,
+async def _run_term_generation_batch_loop(
         metadata_enrichment_asset_id: str,
         data_asset_ids: list[str],
+        query_params: Dict[str, Any],
+        category_id: Optional[str],
+        log_prefix: str,
 ) -> TermGenerationBatchResponse:
     """
-    Call term generation on a metadata enrichment asset.
-    Processes asset_ids in batches of 1 with retry logic for failures.
-    
+    Shared batch-loop implementation for term generation (legacy and v3).
+
+    Runs all data assets through batched term generation with retry logic.
+    Callers are responsible for building query_params before calling this.
+
     Args:
-        project_id: The ID of the project containing the MDE
         metadata_enrichment_asset_id: The ID of the metadata enrichment asset
-        data_asset_ids: List of data asset IDs to generate terms for
-        
+        data_asset_ids: List of data asset IDs to process
+        query_params: Pre-built query parameters (must include project_id)
+        category_id: Optional category ID forwarded to _run_term_generation_batch
+        log_prefix: Opening log message distinguishing legacy vs v3 runs
+
     Returns:
         TermGenerationBatchResponse containing lists of successful and failed asset IDs
-        
+
     Raises:
         ServiceError: If the first 2 consecutive batches have 100% failure rate
     """
-
-    query_params = {
-        "project_id": project_id,
-    }
-
     total_assets = len(data_asset_ids)
     current_index = 0
     term_generation_responses = TermGenerationBatchResponse()
@@ -1304,7 +1332,7 @@ async def call_term_generation_on_metadata_enrichment_asset(
     has_any_success = False
 
     # Phase 1: Initial batch processing
-    LOGGER.info(f"Starting initial batch processing for {total_assets} assets")
+    LOGGER.info(log_prefix)
 
     while current_index < total_assets:
         batch_end = min(current_index + BATCH_SIZE_TERM_GEN, total_assets)
@@ -1313,34 +1341,32 @@ async def call_term_generation_on_metadata_enrichment_asset(
 
         LOGGER.info(f"Processing batch {batch_number}: assets {current_index + 1} of {total_assets}")
 
-        # Process batch using helper function
         batch_successes, batch_failures = await _run_term_generation_batch(
             batch_asset_ids=batch_asset_ids,
             metadata_enrichment_asset_id=metadata_enrichment_asset_id,
-            query_params=query_params
+            query_params=query_params,
+            category_id=category_id,
         )
 
         # Update response tracking
         for asset_id in batch_successes:
             term_generation_responses.successes.append(AssetProcessingResult(asset_id=asset_id))
 
-        for asset_id in batch_failures:
-            failed_asset_ids.append(asset_id)
-            term_generation_responses.failures.append(AssetProcessingResult(asset_id=asset_id))
+        for failure in batch_failures:
+            failed_asset_ids.append(failure.asset_id)
+            term_generation_responses.failures.append(failure)
 
-        # Log batch results
         LOGGER.info(f"Batch {batch_number} completed: {len(batch_successes)} successes, {len(batch_failures)} failures")
 
-        # Check early termination using helper function
+        # Check early termination
         has_any_success, consecutive_full_failures = _check_early_termination(
             batch_number=batch_number,
             has_any_success=has_any_success,
             consecutive_full_failures=consecutive_full_failures,
             batch_success_count=len(batch_successes),
-            batch_total_count=len(batch_asset_ids)
+            batch_total_count=len(batch_asset_ids),
         )
 
-        # Move to next batch
         current_index = batch_end
 
     # Phase 2: Retry failed assets once
@@ -1349,12 +1375,84 @@ async def call_term_generation_on_metadata_enrichment_asset(
             failed_asset_ids=failed_asset_ids,
             metadata_enrichment_asset_id=metadata_enrichment_asset_id,
             query_params=query_params,
-            term_generation_responses=term_generation_responses
+            term_generation_responses=term_generation_responses,
+            category_id=category_id,
         )
     else:
         LOGGER.info("No failed assets to retry")
 
     return term_generation_responses
+
+
+async def call_term_generation_on_metadata_enrichment_asset(
+        project_id: str,
+        metadata_enrichment_asset_id: str,
+        data_asset_ids: list[str],
+        category_id: Optional[str] = None,
+) -> TermGenerationBatchResponse:
+    """
+    Call term generation on a legacy metadata enrichment asset.
+    Processes asset_ids in batches of 1 with retry logic for failures.
+
+    Args:
+        project_id: The ID of the project containing the MDE
+        metadata_enrichment_asset_id: The ID of the metadata enrichment asset
+        data_asset_ids: List of data asset IDs to generate terms for
+        category_id: Optional target category ID (for legacy MDEs that have one configured)
+
+    Returns:
+        TermGenerationBatchResponse containing lists of successful and failed asset IDs
+
+    Raises:
+        ServiceError: If the first 2 consecutive batches have 100% failure rate
+    """
+    query_params: Dict[str, Any] = {"project_id": project_id}
+    if category_id:
+        query_params["category_id"] = category_id
+
+    return await _run_term_generation_batch_loop(
+        metadata_enrichment_asset_id=metadata_enrichment_asset_id,
+        data_asset_ids=data_asset_ids,
+        query_params=query_params,
+        category_id=category_id,
+        log_prefix=f"Starting initial batch processing for {len(data_asset_ids)} assets",
+    )
+
+
+async def call_term_generation_on_metadata_enrichment_asset_v3(
+        project_id: str,
+        metadata_enrichment_asset_id: str,
+        data_asset_ids: list[str],
+        category_id: str,
+) -> TermGenerationBatchResponse:
+    """
+    Call term generation on a V3 metadata enrichment asset with target category.
+    Processes asset_ids in batches of 1 with retry logic for failures.
+
+    Args:
+        project_id: The ID of the project containing the MDE
+        metadata_enrichment_asset_id: The ID of the metadata enrichment asset
+        data_asset_ids: List of data asset IDs to generate terms for
+        category_id: The target category ID for term generation (required for V3)
+
+    Returns:
+        TermGenerationBatchResponse containing lists of successful and failed asset IDs
+
+    Raises:
+        ServiceError: If the first 2 consecutive batches have 100% failure rate
+    """
+    query_params: Dict[str, Any] = {
+        "project_id": project_id,
+        "category_id": category_id,
+    }
+
+    return await _run_term_generation_batch_loop(
+        metadata_enrichment_asset_id=metadata_enrichment_asset_id,
+        data_asset_ids=data_asset_ids,
+        query_params=query_params,
+        category_id=category_id,
+        log_prefix=f"Starting V3 term generation for {len(data_asset_ids)} assets with category {category_id}",
+    )
 
 
 async def find_data_asset_ids_for_mde_id(metadata_enrichment_id: str, project_id: str) -> list[str]:
@@ -1597,17 +1695,17 @@ async def _process_mde_resource(
     asset_id = resource.get("asset_id")
 
     metadata_enrichment_area = resource.get("asset", {}).get("entity", {}).get("metadata_enrichment_area", {})
-    enrichment_objectives = metadata_enrichment_area.get("objective", {}).get("enrichment_options", {}).get("structured", {})
-    objective = [ENRICHMENT_OBJECTIVES_MAP.get(key) or key for key, value in enrichment_objectives.items() if value]
+
+    # NOTE: Objectives are no longer extracted for MDE listing.
+    # For V3 MDEs, objectives are job-specific (not MDE-level) and shown during job selection.
+    # For legacy MDEs, objectives are MDE-level but not critical for initial listing.
+    # This design is future-proof for when legacy APIs are deprecated.
+    objective = []
+
     data_assets = metadata_enrichment_area.get("data_scope", {}).get("enrichment_assets", [])
 
     mde_url = Template(MDE_UI_URL_TEMPLATE).substitute(
         mde_id=asset_id, project_id=project_id
-    )
-
-    target_category_id = metadata_enrichment_area.get("objective", {}).get("term_assignment", {}).get("term_generation_target_category_id", "")
-    target_category_url = Template(CATEGORY_UI_URL_TEMPLATE).substitute(
-        governance_base=get_governance_base_url(), target_category_id=target_category_id
     )
 
     # Fetch and process data assets in batches to get actual term counts
@@ -1632,10 +1730,7 @@ async def _process_mde_resource(
         objective=objective,
         name=resource.get("asset", {}).get("metadata", {}).get("name", ""),
         data_assets=enrichment_assets_info,
-        governance_scope=metadata_enrichment_area.get("objective", {}).get("governance_scope", []),
         mde_url=mde_url,
-        target_category_id=target_category_id,
-        target_category_url=target_category_url,
     )
 
 
@@ -1743,12 +1838,17 @@ async def _get_and_process_mde_assets_in_batches(
     )
 
     # Process full MDE to extract relevant data for user message
+    # Filter out MDEs with no data assets
     mde_details: dict[str, MetadataEnrichmentDetails] = {}
     for resource in successful_resources:
         asset_id = resource.get("asset_id")
         if asset_id:
             mde_detail = await _process_mde_resource(resource, project_id)
-            mde_details[asset_id] = mde_detail
+            # Only include MDEs that have data assets
+            if mde_detail.data_assets.asset_count > 0:
+                mde_details[asset_id] = mde_detail
+            else:
+                LOGGER.info(f"Skipping MDE {asset_id} - no data assets found")
 
     return mde_details, failed_asset_ids
 

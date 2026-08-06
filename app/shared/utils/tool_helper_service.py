@@ -132,7 +132,9 @@ class ToolHelperService:
         Raises:
             ExternalAPIError: If the request fails
         """
-        headers["Authorization"] = await get_access_token()
+        access_token = await get_access_token()
+        if access_token:
+            headers["Authorization"] = access_token
         try:
             # Get the appropriate HTTP client method
             client_method = getattr(self.http_client, method.value.lower())

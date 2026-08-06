@@ -33,7 +33,7 @@ class SqlQueryGenerationResponse(BaseResponseModel):
     """Response model for SQL query generation."""
 
     status: str = Field(
-        ..., description="Status of the generation: 'success' or 'failed'"
+        default="failed", description="Status of the generation: 'success' or 'failed'"
     )
     project_id: str | None = Field(
         None, description="Unique identifier of the project (present on success)"

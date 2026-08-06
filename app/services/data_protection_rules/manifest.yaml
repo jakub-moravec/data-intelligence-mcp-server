@@ -7,5 +7,6 @@ system_instructions: |
   Data Protection Rules Tools:
   1. get_data_protection_rule_schema - Get the complete JSON schema, valid terms, and examples for creating data protection rules. Call this FIRST before creating a rule.
   2. create_data_protection_rule - Create a new data protection rule from JSON string. Call get_data_protection_rule_schema() first to understand the format.
-  3. search_data_protection_rules - Search data protection rule by query filter.
-  4. search_governance_artifacts - Search for governance artifacts (classifications, data classes, or business terms) by query to find existing artifacts in IBM Knowledge Catalog.
+  3. search_data_protection_rules - Search data protection rule by query filter. NOTE: Data protection rules are NOT governance artifacts — do NOT include them in governance artifact counts or type listings.
+  4. search_governance_artifacts - Search for governance artifacts by query. Supports all 6 governance artifact types: 'classification', 'data_class', 'glossary_term' (business terms), 'policy', 'rule', and 'reference_data'. Use this for counting/listing governance artifacts, NOT search_data_protection_rules or category searches.
+  5. get_policy_metrics - Retrieve and aggregate DPS (Data Privacy and Security) policy enforcement metrics for a specified time period. Requires specifying a metrics_type (enforcements, denials, operational_policies, or operational_rules) and an aggregation_type. Supports optional filters for policy, rule, user, governance type, and outcome.

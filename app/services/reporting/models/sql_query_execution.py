@@ -30,7 +30,7 @@ class SqlQueryExecutionResponse(BaseResponseModel):
     """Response model for SQL query execution."""
 
     status: str = Field(
-        ..., description="Status of the execution: 'success' or 'failed'"
+        default="failed", description="Status of the execution: 'success' or 'failed'"
     )
     sql_result: SqlResult | None = Field(
         None, description="SQL execution result (present on success)"

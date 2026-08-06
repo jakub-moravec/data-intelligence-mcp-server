@@ -37,11 +37,13 @@ VALID_NAMED_ENTITIES: list[str] = [
 ]
 
 # Governance artifact types that share the glossary-term URL pattern.
-GOVERNANCE_GLOSSARY_PATHS: dict[str, str] = {    
+GOVERNANCE_GLOSSARY_PATHS: dict[str, str] = {
     "glossary_term": "terms",
     "classification": "classifications",
     "data_class": "data-classes",
     "reference_data": "refdata",
+    "policy": "policies",
+    "rule": "rules",
 }
 
 TOOL_DESCRIPTION = """Use this tool when you need to searched items and return list of fetched data.

@@ -31,14 +31,14 @@ async def _search_governance_artifacts(
     )
 
     # Validate rhs_type
-    if request.rhs_type not in ["classification", "data_class", "glossary_term"]:
+    if request.rhs_type not in ["classification", "data_class", "glossary_term", "policy", "rule", "reference_data"]:
         LOGGER.error(
-            f"Invalid rhs_type: {request.rhs_type}. Must be one of: classification, data_class, glossary_term."
+            f"Invalid rhs_type: {request.rhs_type}. Must be one of: classification, data_class, glossary_term, policy, rule, reference_data."
         )
         return SearchGovernanceArtifactResponse(
             count=0,
             artifacts=[],
-            message=f"Invalid rhs_type '{request.rhs_type}'. Must be one of: 'classification', 'data_class', 'glossary_term'."
+            message=f"Invalid rhs_type '{request.rhs_type}'. Must be one of: 'classification', 'data_class', 'glossary_term', 'policy', 'rule', 'reference_data'."
         )
 
     # Validate query_value
@@ -116,7 +116,7 @@ def format_artifacts_for_table(artifacts: list[GovernanceArtifact]) -> list:
         "title": "Search Governance Artifacts"
     },
     description="""Use this tool when you need to search for existing governance artifacts by correct names in IBM Knowledge Catalog.
-    This tool searches for governance artifacts (classifications, data classes, or glossary terms) by query and returns matching results.
+    This tool searches for all 6 governance artifact types: classifications, data classes, glossary terms, policies, governance rules, and reference data.
     
     Examples:
         - "Find all classifications related to Personally Identifiable Information data"
@@ -124,6 +124,9 @@ def format_artifacts_for_table(artifacts: list[GovernanceArtifact]) -> list:
         - "Look up business terms about account"
         - "Search for data classes social security data"
         - "Check if we already have a classification for sensitive personal data"
+        - "Search for policies about data retention"
+        - "Look up governance rules about access control"
+        - "Search for reference data about country codes"
     Returns: List of matching governance artifacts with count and status message.
     """,
     tags={"search", "data_protection_rules", "governance"},
@@ -131,7 +134,7 @@ def format_artifacts_for_table(artifacts: list[GovernanceArtifact]) -> list:
 )
 @auto_context
 async def search_governance_artifacts(
-    rhs_type: Annotated[Literal["classification", "data_class", "glossary_term"], Field(description="Governance artifacts type name. Must be one of: 'classification', 'data_class', or 'glossary_term'(another name is business term).")],
+    rhs_type: Annotated[Literal["classification", "data_class", "glossary_term", "policy", "rule", "reference_data"], Field(description="Governance artifacts type name. Must be one of: 'classification', 'data_class', 'glossary_term'(another name is business term), 'policy', 'rule', or 'reference_data'.")],
     query_value: Annotated[str, Field(description="The search query string to find matching governance artifacts.Cannot be empty.")]
 ) -> SearchGovernanceArtifactResponse:
     """Wrapper version that expands SearchGovernanceArtifactRequest object into individual parameters."""

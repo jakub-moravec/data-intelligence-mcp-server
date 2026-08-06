@@ -25,6 +25,7 @@ class Artifact(BaseModel):
     updated_at: Optional[str] = Field(None, description="Last update timestamp")
     workflow_id: Optional[str] = Field(None, description="Workflow ID for artifacts in draft")
     artifact_type: Optional[str] = Field(None, description="Type of artifact: 'data_class' or 'glossary_term'")
+    version_id: Optional[str] = Field(None, description="Version ID of the artifact")
 
 class BusinessTerm(Artifact):
     """Model representing a glossary business term (alias for Artifact)."""
